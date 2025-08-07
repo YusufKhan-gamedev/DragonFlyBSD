@@ -1483,6 +1483,7 @@ kern/vfs_cache.c	standard
 kern/vfs_cluster.c	standard
 kern/vfs_conf.c		standard
 kern/vfs_default.c	standard
+kern/vfs_hash.c		standard
 kern/vfs_helper.c	standard
 kern/vfs_init.c		standard
 kern/vfs_journal.c	standard

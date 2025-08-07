@@ -167,6 +167,7 @@ struct vnode {
 	enum vtype	v_type;			/* vnode type */
 	int16_t		v_act;			/* use heuristic */
 	int16_t		v_state;		/* active/free/cached */
+	u_int		v_hash;
 	union {
 		struct socket	*vu_socket;	/* unix ipc (VSOCK) */
 		struct {
@@ -496,6 +497,19 @@ void	vn_islocked_relock (struct vnode *vp, int vpls);
 int	vn_lock (struct vnode *vp, int flags);
 void	vn_unlock (struct vnode *vp);
 int	vn_relock (struct vnode *vp, int flags);
+
+typedef int vfs_hash_cmp_t(struct vnode *vp, void *arg);
+
+void vfs_hash_changesize(u_long newhashsize);
+int vfs_hash_get(const struct mount *mp, u_int hash, int flags,
+    struct thread *td, struct vnode **vpp, vfs_hash_cmp_t *fn, void *arg);
+u_int vfs_hash_index(struct vnode *vp);
+int vfs_hash_insert(struct vnode *vp, u_int hash, int flags, struct thread *td,
+    struct vnode **vpp, vfs_hash_cmp_t *fn, void *arg);
+void vfs_hash_ref(const struct mount *mp, u_int hash, struct thread *td,
+    struct vnode **vpp, vfs_hash_cmp_t *fn, void *arg);
+void vfs_hash_rehash(struct vnode *vp, u_int hash);
+void vfs_hash_remove(struct vnode *vp);
 
 /*#define DEBUG_VN_UNLOCK*/
 #ifdef DEBUG_VN_UNLOCK
