@@ -147,6 +147,14 @@ static struct lwkt_token mountlist_token;
 
 static TAILQ_HEAD(,bio_ops) bio_ops_list = TAILQ_HEAD_INITIALIZER(bio_ops_list);
 
+/* Shift count for (uintptr_t)vp to initialize vp->v_hash. */
+#define vnsz2log 8
+#ifndef DEBUG_LOCKS
+_Static_assert(sizeof(struct vnode) >= 1UL << vnsz2log &&
+    sizeof(struct vnode) < 1UL << (vnsz2log + 1),
+    "vnsz2log needs to be updated");
+#endif
+
 /*
  * Called from vfsinit()
  */
@@ -214,6 +222,14 @@ getnewvnode(enum vtagtype tag, struct mount *mp,
 	 * VNON prevents it from being messed with, however.
 	 */
 	insmntque(vp, mp);
+
+	/*
+	 * For the filesystems which do not use vfs_hash_insert(),
+	 * still initialize v_hash to have vfs_hash_index() useful.
+	 * E.g., nullfs uses vfs_hash_index() on the lower vnode for
+	 * its own hashing.
+	 */
+	vp->v_hash = (uintptr_t)vp >> vnsz2log;
 
 	/*
 	 * A VX locked & refd vnode is returned.
