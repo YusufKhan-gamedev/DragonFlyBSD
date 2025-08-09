@@ -242,8 +242,8 @@ tarfs_zio_update_index(struct tarfs_zio *zio, off_t i, off_t o)
 		    zio->curidx, (size_t)zio->idx[zio->curidx].i,
 		    (size_t)zio->idx[zio->curidx].o);
 	}
-	MPASS(zio->idx[zio->curidx].i == i);
-	MPASS(zio->idx[zio->curidx].o == o);
+	KKASSERT(zio->idx[zio->curidx].i == i);
+	KKASSERT(zio->idx[zio->curidx].o == o);
 }
 #endif
 
@@ -383,9 +383,9 @@ tarfs_zread_zstd(struct tarfs_zio *zio, struct uio *uiop)
 	 * TODO: to avoid using a bounce buffer, map destination pages
 	 * using vm_fault_quick_hold_pages().
 	 */
-	MPASS(zio->opos <= off);
-	MPASS(uiop->uio_iovcnt == 1);
-	MPASS(uiop->uio_iov->iov_len >= len);
+	KKASSERT(zio->opos <= off);
+	KKASSERT(uiop->uio_iovcnt == 1);
+	KKASSERT(uiop->uio_iov->iov_len >= len);
 	if (uiop->uio_segflg == UIO_SYSSPACE) {
 		zob.dst = uiop->uio_iov->iov_base;
 	} else {
@@ -435,7 +435,7 @@ tarfs_zread_zstd(struct tarfs_zio *zio, struct uio *uiop)
 			zib.size = bsize - auio.uio_resid;
 			zib.pos = 0;
 		}
-		MPASS(zib.pos <= zib.size);
+		KKASSERT(zib.pos <= zib.size);
 		if (zib.pos == zib.size) {
 			TARFS_DPF(ZIO, "%s: end of file after i %zu o %zu\n", __func__,
 			    (size_t)zio->ipos, (size_t)zio->opos);
@@ -659,11 +659,11 @@ tarfs_io_init(struct tarfs_mount *tmp)
 		return (-res);
 	}
 	if (memcmp(block, XZ_MAGIC, sizeof(XZ_MAGIC)) == 0) {
-		printf("xz compression not supported\n");
+		kprintf("xz compression not supported\n");
 		error = EOPNOTSUPP;
 		goto bad;
 	} else if (memcmp(block, ZLIB_MAGIC, sizeof(ZLIB_MAGIC)) == 0) {
-		printf("zlib compression not supported\n");
+		kprintf("zlib compression not supported\n");
 		error = EOPNOTSUPP;
 		goto bad;
 	} else if (memcmp(block, ZSTD_MAGIC, sizeof(ZSTD_MAGIC)) == 0) {
@@ -673,7 +673,7 @@ tarfs_io_init(struct tarfs_mount *tmp)
 		zio->zstd->zds = ZSTD_createDStream_advanced(tarfs_zstd_mem);
 		(void)ZSTD_initDStream(zio->zstd->zds);
 #else
-		printf("zstd compression not supported\n");
+		kprintf("zstd compression not supported\n");
 		error = EOPNOTSUPP;
 		goto bad;
 #endif

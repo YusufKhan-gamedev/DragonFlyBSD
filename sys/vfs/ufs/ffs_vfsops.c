@@ -748,7 +748,6 @@ ffs_mountfs(struct vnode *devvp, struct mount *mp, struct malloc_type *mtype)
 		mp->mnt_time = fs->fs_time;
 	}
 
-	ufs_ihashinit(ump);
 	ump->um_savedmaxfilesize = fs->fs_maxfilesize;		/* XXX */
 	maxfilesize = (uint64_t)0x40000000 * fs->fs_bsize - 1;	/* XXX */
 	/* Enforce limit caused by vm object backing (32 bits vm_pindex_t). */
@@ -779,7 +778,6 @@ out:
 	VOP_CLOSE(devvp, ronly ? FREAD : FREAD|FWRITE, NULL);
 	vn_unlock(devvp);
 	if (ump) {
-		ufs_ihashuninit(ump);
 		kfree(ump->um_fs, M_UFSMNT);
 		kfree(ump, M_UFSMNT);
 		mp->mnt_data = (qaddr_t)0;
@@ -859,7 +857,6 @@ ffs_unmount(struct mount *mp, int mntflags)
 
 	vrele(ump->um_devvp);
 
-	ufs_ihashuninit(ump);
 	kfree(fs->fs_csp, M_UFSMNT);
 	kfree(fs, M_UFSMNT);
 	kfree(ump, M_UFSMNT);

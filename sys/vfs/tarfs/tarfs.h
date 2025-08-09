@@ -52,7 +52,7 @@ struct tarfs_node {
 	TAILQ_ENTRY(tarfs_node)	entries;
 	TAILQ_ENTRY(tarfs_node)	dirents;
 
-	struct mtx		 lock;
+	struct lock		 lock;
 
 	struct vnode		*vnode;
 	struct tarfs_mount	*tmp;
@@ -127,7 +127,7 @@ struct tarfs_zbuf {
  */
 struct tarfs_mount {
 	TAILQ_HEAD(, tarfs_node) allnodes;
-	struct mtx		 allnode_lock;
+	struct lock		 allnode_lock;
 
 	struct tarfs_node	*root;
 	struct vnode		*vp;
@@ -212,7 +212,7 @@ struct tarfs_mount *
 MP_TO_TARFS_MOUNT(struct mount *mp)
 {
 
-	MPASS(mp != NULL && mp->mnt_data != NULL);
+	KKASSERT(mp != NULL && mp->mnt_data != NULL);
 	return (mp->mnt_data);
 }
 
@@ -221,7 +221,7 @@ struct tarfs_node *
 VP_TO_TARFS_NODE(struct vnode *vp)
 {
 
-	MPASS(vp != NULL && vp->v_data != NULL);
+	KKASSERT(vp != NULL && vp->v_data != NULL);
 	return (vp->v_data);
 }
 
