@@ -878,7 +878,7 @@ tarfs_alloc_mount(struct mount *mp, struct vnode *vp,
 	if (error != 0) {
 		return (error);
 	}
-	VOP_UNLOCK(vp);
+	vn_unlock(vp);
 	mtime = va.va_mtime.tv_sec;
 
 	mp->mnt_iosize_max = vp->v_mount->mnt_iosize_max;
@@ -953,7 +953,7 @@ tarfs_mount(struct mount *mp)
 
 	vn_lock(mp->mnt_vnodecovered, LK_SHARED | LK_RETRY);
 	error = VOP_GETATTR(mp->mnt_vnodecovered, &va, mp->mnt_cred);
-	VOP_UNLOCK(mp->mnt_vnodecovered);
+	vn_unlock(mp->mnt_vnodecovered);
 	if (error)
 		return (error);
 
@@ -1042,7 +1042,7 @@ bad_open_locked:
 	/* vp must be held and locked */
 	TARFS_DPF(FS, "%s: L: hold %u use %u lock 0x%x\n", __func__,
 	    vp->v_holdcnt, vp->v_usecount, VOP_ISLOCKED(vp));
-	VOP_UNLOCK(vp);
+	vn_unlock(vp);
 bad_open_unlocked:
 	/* vp must be held and unlocked */
 	TARFS_DPF(FS, "%s: E: hold %u use %u lock 0x%x\n", __func__,

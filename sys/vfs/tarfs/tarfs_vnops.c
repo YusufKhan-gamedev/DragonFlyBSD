@@ -93,7 +93,7 @@ tarfs_access(struct vop_access_args *ap)
 	int error;
 
 	vp = ap->a_vp;
-	accmode = ap->a_accmode;
+	accmode = ap->a_mode;
 	cred = ap->a_cred;
 
 	KKASSERT(VOP_ISLOCKED(vp));

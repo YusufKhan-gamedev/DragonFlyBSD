@@ -126,7 +126,7 @@ tarfs_io_read(struct tarfs_mount *tmp, bool raw, struct uio *uiop)
 		if (error == 0) {
 			error = VOP_READ(tmp->vp, uiop, IO_NODELOCKED,
 			    uiop->uio_td->td_ucred);
-			VOP_UNLOCK(tmp->vp);
+			vn_unlock(tmp->vp);
 		}
 		vn_rangelock_unlock(tmp->vp, rl);
 	} else {
@@ -135,7 +135,7 @@ tarfs_io_read(struct tarfs_mount *tmp, bool raw, struct uio *uiop)
 			error = VOP_READ(tmp->znode, uiop,
 			    IO_DIRECT | IO_NODELOCKED,
 			    uiop->uio_td->td_ucred);
-			VOP_UNLOCK(tmp->znode);
+			vn_unlock(tmp->znode);
 		}
 	}
 	TARFS_DPF(IO, "%s(%zu, %zu) = %d (resid %zd)\n", __func__,
@@ -256,14 +256,14 @@ tarfs_zaccess(struct vop_access_args *ap)
 	struct vnode *vp = ap->a_vp;
 	struct tarfs_zio *zio = vp->v_data;
 	struct tarfs_mount *tmp = zio->tmp;
-	accmode_t accmode = ap->a_accmode;
+	mode_t accmode = ap->a_mode;
 	int error = EPERM;
 
 	if (accmode == VREAD) {
 		error = vn_lock(tmp->vp, LK_SHARED);
 		if (error == 0) {
-			error = VOP_ACCESS(tmp->vp, accmode, ap->a_cred, ap->a_td);
-			VOP_UNLOCK(tmp->vp);
+			error = VOP_ACCESS(tmp->vp, accmode, ap->a_cred);
+			vn_unlock(tmp->vp);
 		}
 	}
 	TARFS_DPF(ZIO, "%s(%d) = %d\n", __func__, accmode, error);
@@ -286,8 +286,8 @@ tarfs_zgetattr(struct vop_getattr_args *ap)
 	VATTR_NULL(vap);
 	error = vn_lock(tmp->vp, LK_SHARED);
 	if (error == 0) {
-		error = VOP_GETATTR(tmp->vp, &va, ap->a_cred);
-		VOP_UNLOCK(tmp->vp);
+		error = VOP_GETATTR(tmp->vp, &va);
+		vn_unlock(tmp->vp);
 		if (error == 0) {
 			vap->va_type = VREG;
 			vap->va_mode = va.va_mode;
@@ -301,7 +301,7 @@ tarfs_zgetattr(struct vop_getattr_args *ap)
 			vap->va_atime = va.va_atime;
 			vap->va_ctime = va.va_ctime;
 			vap->va_mtime = va.va_mtime;
-			vap->va_birthtime = tmp->root->birthtime;
+
 			vap->va_bytes = va.va_bytes;
 		}
 	}
@@ -479,7 +479,7 @@ tarfs_zread_zstd(struct tarfs_zio *zio, struct uio *uiop)
 #endif
 	}
 fail:
-	VOP_UNLOCK(tmp->vp);
+	vn_unlock(tmp->vp);
 fail_unlocked:
 	if (error == 0) {
 		if (uiop->uio_segflg == UIO_SYSSPACE) {
@@ -568,16 +568,16 @@ tarfs_zstrategy(struct vop_strategy_args *ap)
 	struct uio auio;
 	struct iovec iov;
 	struct vnode *vp = ap->a_vp;
-	struct buf *bp = ap->a_bp;
+	struct bio *bp = ap->a_bio;
 	off_t off;
 	size_t len;
 	int error;
 
-	iov.iov_base = bp->b_data;
-	iov.iov_len = bp->b_bcount;
-	off = bp->b_iooffset;
-	len = bp->b_bcount;
-	bp->b_resid = len;
+	iov.iov_base = bp->bio_buf->b_data;
+	iov.iov_len = bp->bio_buf->b_bcount;
+	off = bp->bio_offset;
+	len = bp->bio_buf->b_bcount;
+	bp->bio_buf->b_resid = len;
 	auio.uio_iov = &iov;
 	auio.uio_iovcnt = 1;
 	auio.uio_offset = off;
@@ -585,17 +585,17 @@ tarfs_zstrategy(struct vop_strategy_args *ap)
 	auio.uio_segflg = UIO_SYSSPACE;
 	auio.uio_rw = UIO_READ;
 	auio.uio_td = curthread;
-	error = VOP_READ(vp, &auio, IO_DIRECT | IO_NODELOCKED, bp->b_rcred);
-	bp->b_flags |= B_DONE;
+	error = VOP_READ(vp, &auio, IO_DIRECT | IO_NODELOCKED, bp->bio_buf->b_rcred);
+	bp->bio_flags |= BIO_DONE;
 	if (error != 0) {
-		bp->b_ioflags |= BIO_ERROR;
-		bp->b_error = error;
+		bp->bio_flags |= B_ERROR;
+		bp->bio_buf->b_error = error;
 	}
 	return (0);
 }
 
-static struct vop_vector tarfs_znodeops = {
-	.vop_default =		&default_vnodeops,
+static struct vop_ops tarfs_vnodeops = {
+	.vop_default =		vop_defaultop,
 
 	.vop_access =		tarfs_zaccess,
 	.vop_getattr =		tarfs_zgetattr,
