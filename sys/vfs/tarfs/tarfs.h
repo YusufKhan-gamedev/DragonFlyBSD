@@ -207,7 +207,7 @@ extern unsigned int tarfs_ioshift;
 #define	TARFS_ZIO_NAME		".tar"
 #define	TARFS_ZIO_NAMELEN	(sizeof(TARFS_ZIO_NAME) - 1)
 
-extern struct vop_vector tarfs_vnodeops;
+extern struct vop_ops tarfs_vnodeops;
 
 static inline
 struct tarfs_mount *

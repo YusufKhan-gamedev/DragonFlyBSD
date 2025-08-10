@@ -39,9 +39,11 @@
 #include <sys/namei.h>
 #include <sys/proc.h>
 #include <sys/vnode.h>
+#include <sys/malloc.h>
+#include <sys/uio.h>
 
-#include <fs/tarfs/tarfs.h>
-#include <fs/tarfs/tarfs_dbg.h>
+#include <vfs/tarfs/tarfs.h>
+#include <vfs/tarfs/tarfs_dbg.h>
 
 static int
 tarfs_open(struct vop_open_args *ap)
@@ -88,7 +90,7 @@ tarfs_access(struct vop_access_args *ap)
 {
 	struct tarfs_node *tnp;
 	struct vnode *vp;
-	accmode_t accmode;
+	mode_t accmode;
 	struct ucred *cred;
 	int error;
 
@@ -472,7 +474,7 @@ done:
 	if (error == 0 && cookies != NULL && ncookies != NULL) {
 		TARFS_DPF(VNODE, "%s: Updating NFS cookies\n", __func__);
 		current = NULL;
-		*cookies = malloc(ndirents * sizeof(off_t), M_TEMP, M_WAITOK);
+		*cookies = kmalloc(ndirents * sizeof(off_t), M_TEMP, M_WAITOK);
 		*ncookies = ndirents;
 		for (idx = 0; idx < ndirents; idx++) {
 			if (off == TARFS_COOKIE_DOT)
@@ -598,16 +600,16 @@ tarfs_print(struct vop_print_args *ap)
 	vp = ap->a_vp;
 	tnp = VP_TO_TARFS_NODE(vp);
 
-	printf("tag tarfs, tarfs_node %p, links %lu\n",
+	kprintf("tag tarfs, tarfs_node %p, links %lu\n",
 	    tnp, (unsigned long)tnp->nlink);
-	printf("\tmode 0%o, owner %d, group %d, size %zd\n",
+	kprintf("\tmode 0%o, owner %d, group %d, size %zd\n",
 	    tnp->mode, tnp->uid, tnp->gid,
 	    tnp->size);
 
 	if (vp->v_type == VFIFO)
 		fifo_printinfo(vp);
 
-	printf("\n");
+	kprintf("\n");
 
 	return (0);
 }
@@ -656,10 +658,10 @@ tarfs_strategy(struct vop_strategy_args *ap)
 	bp->b_resid -= len - auio.uio_resid;
 out:
 	if (error != 0) {
-		bp->b_ioflags |= BIO_ERROR;
+		bp->b_ioflags |= B_ERROR;
 		bp->b_error = error;
 	}
-	bp->b_flags |= B_DONE;
+	bp->b_flags |= BIO_DONE;
 	return (0);
 }
 
@@ -681,7 +683,7 @@ tarfs_vptofh(struct vop_vptofh_args *ap)
 	return (0);
 }
 
-struct vop_vector tarfs_vnodeops = {
+struct vop_ops tarfs_vnodeops = {
 	.vop_default =		&default_vnodeops,
 
 	.vop_access =		tarfs_access,
@@ -699,4 +701,3 @@ struct vop_vector tarfs_vnodeops = {
 	.vop_strategy =		tarfs_strategy,
 	.vop_vptofh =		tarfs_vptofh,
 };
-VFS_VOP_VECTOR_REGISTER(tarfs_vnodeops);

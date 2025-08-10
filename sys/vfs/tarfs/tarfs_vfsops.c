@@ -53,8 +53,8 @@
 #include <geom/geom.h>
 #include <geom/geom_vfs.h>
 
-#include <fs/tarfs/tarfs.h>
-#include <fs/tarfs/tarfs_dbg.h>
+#include <vfs/tarfs/tarfs.h>
+#include <vfs/tarfs/tarfs_dbg.h>
 
 CTASSERT(ZERO_REGION_SIZE >= TARFS_BLOCKSIZE);
 
