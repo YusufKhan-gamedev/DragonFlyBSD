@@ -45,6 +45,8 @@ struct componentname;
 struct mount;
 struct vnode;
 
+#define ZERO_REGION_SIZE (2^20)
+
 /*
  * Internal representation of a tarfs file system node.
  */
@@ -167,13 +169,13 @@ struct tarfs_fid {
 };
 
 #define	TARFS_NODE_LOCK(tnp) \
-	mtx_lock(&(tnp)->lock)
+	lockmgr(&(tnp)->lock, LK_EXCLUSIVE)
 #define	TARFS_NODE_UNLOCK(tnp) \
-	mtx_unlock(&(tnp)->lock)
+	lockmgr(&(tnp)->lock, LK_RELEASE)
 #define	TARFS_ALLNODES_LOCK(tnp) \
-	mtx_lock(&(tmp)->allnode_lock)
+	lockmgr(&(tmp)->allnode_lock, LK_EXCLUSIVE)
 #define	TARFS_ALLNODES_UNLOCK(tnp) \
-	mtx_unlock(&(tmp)->allnode_lock)
+	lockmgr(&(tmp)->allnode_lock, LK_RELEASE)
 
 /*
  * Data and metadata within tar files are aligned on 512-byte boundaries,
@@ -213,7 +215,7 @@ MP_TO_TARFS_MOUNT(struct mount *mp)
 {
 
 	KKASSERT(mp != NULL && mp->mnt_data != NULL);
-	return (mp->mnt_data);
+	return (struct tarfs_mount *)(mp->mnt_data);
 }
 
 static inline

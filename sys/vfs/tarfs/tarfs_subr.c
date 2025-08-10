@@ -35,6 +35,7 @@
 #include <sys/fcntl.h>
 #include <sys/libkern.h>
 #include <sys/lock.h>
+#include <sys/uio.h>
 #include <sys/malloc.h>
 #include <sys/mount.h>
 #include <sys/namei.h>
@@ -45,8 +46,8 @@
 
 #include <vm/vm_param.h>
 
-#include <fs/tarfs/tarfs.h>
-#include <fs/tarfs/tarfs_dbg.h>
+#include <vfs/tarfs/tarfs.h>
+#include <vfs/tarfs/tarfs_dbg.h>
 
 MALLOC_DEFINE(M_TARFSNAME, "tarfs name", "tarfs file names");
 MALLOC_DEFINE(M_TARFSBLK, "tarfs blk", "tarfs block maps");
@@ -54,6 +55,8 @@ MALLOC_DEFINE(M_TARFSBLK, "tarfs blk", "tarfs block maps");
 SYSCTL_NODE(_vfs, OID_AUTO, tarfs, CTLFLAG_RW, 0, "Tar filesystem");
 
 unsigned int tarfs_ioshift = TARFS_IOSHIFT_DEFAULT;
+
+static const char zero_region[ZERO_REGION_SIZE] = { 0 };
 
 static int
 tarfs_sysctl_handle_ioshift(SYSCTL_HANDLER_ARGS)
@@ -79,7 +82,7 @@ tarfs_sysctl_handle_ioshift(SYSCTL_HANDLER_ARGS)
 }
 
 SYSCTL_PROC(_vfs_tarfs, OID_AUTO, ioshift,
-    CTLTYPE_UINT | CTLFLAG_MPSAFE | CTLFLAG_RWTUN,
+    CTLTYPE_UINT | CTLFLAG_RW,
     &tarfs_ioshift, 0, tarfs_sysctl_handle_ioshift, "IU",
     "Tar filesystem preferred I/O size (log 2)");
 
@@ -163,7 +166,7 @@ tarfs_lookup_dir(struct tarfs_node *tnp, off_t cookie)
 
 int
 tarfs_alloc_node(struct tarfs_mount *tmp, const char *name, size_t namelen,
-    __enum_uint8(vtype) type, off_t off, size_t sz, time_t mtime, uid_t uid, gid_t gid,
+    enum vtype type, off_t off, size_t sz, time_t mtime, uid_t uid, gid_t gid,
     mode_t mode, unsigned int flags, const char *linkname, dev_t rdev,
     struct tarfs_node *parent, struct tarfs_node **retnode)
 {
@@ -173,12 +176,12 @@ tarfs_alloc_node(struct tarfs_mount *tmp, const char *name, size_t namelen,
 
 	if (parent != NULL && parent->type != VDIR)
 		return (ENOTDIR);
-	tnp = malloc(sizeof(struct tarfs_node), M_TARFSNODE, M_WAITOK | M_ZERO);
-	mtx_init(&tnp->lock, "tarfs node lock", NULL, MTX_DEF);
-	tnp->gen = arc4random();
+	tnp = kmalloc(sizeof(struct tarfs_node), M_TARFSNODE, M_WAITOK | M_ZERO);
+	lockinit(&tnp->lock, "tarfs node lock", 0, LK_CANRECURSE);
+	tnp->gen = karc4random();
 	tnp->tmp = tmp;
 	if (namelen > 0) {
-		tnp->name = malloc(namelen + 1, M_TARFSNAME, M_WAITOK);
+		tnp->name = kmalloc(namelen + 1, M_TARFSNAME, M_WAITOK);
 		tnp->namelen = namelen;
 		memcpy(tnp->name, name, namelen);
 		tnp->name[namelen] = '\0';
@@ -209,7 +212,7 @@ tarfs_alloc_node(struct tarfs_mount *tmp, const char *name, size_t namelen,
 		tnp->physize = 0;
 		break;
 	case VLNK:
-		tnp->link.name = malloc(sz + 1, M_TARFSNAME,
+		tnp->link.name = kmalloc(sz + 1, M_TARFSNAME,
 		    M_WAITOK);
 		tnp->link.namelen = sz;
 		memcpy(tnp->link.name, linkname, sz);
@@ -218,7 +221,7 @@ tarfs_alloc_node(struct tarfs_mount *tmp, const char *name, size_t namelen,
 	case VREG:
 		/* create dummy block map */
 		tnp->nblk = 1;
-		tnp->blk = malloc(sizeof(*tnp->blk), M_TARFSBLK, M_WAITOK);
+		tnp->blk = kmalloc(sizeof(*tnp->blk), M_TARFSBLK, M_WAITOK);
 		tnp->blk[0].i = 0;
 		tnp->blk[0].o = 0;
 		tnp->blk[0].l = tnp->physize;
@@ -282,7 +285,7 @@ tarfs_load_blockmap(struct tarfs_node *tnp, size_t realsize)
 			goto bad;
 		}
 		/* grow the map */
-		map = realloc(map, nmap * TARFS_BLOCKSIZE + 1, M_TARFSBLK,
+		map = krealloc(map, nmap * TARFS_BLOCKSIZE + 1, M_TARFSBLK,
 		    M_ZERO | M_WAITOK);
 		/* read an additional block */
 		res = tarfs_io_read_buf(tnp->tmp, false,
@@ -308,7 +311,7 @@ tarfs_load_blockmap(struct tarfs_node *tnp, size_t realsize)
 		TARFS_DPF(MAP, "%s: %ld newlines in map\n", __func__, n);
 	} while (n < nblk * 2 + 1);
 	TARFS_DPF(MAP, "%s: block map length %zu\n", __func__, nblk);
-	blk = malloc(sizeof(*blk) * nblk, M_TARFSBLK, M_WAITOK | M_ZERO);
+	blk = kmalloc(sizeof(*blk) * nblk, M_TARFSBLK, M_WAITOK | M_ZERO);
 	p = strchr(map, '\n') + 1;
 	for (i = 0; i < nblk; i++) {
 		if (i == 0)
@@ -359,10 +362,10 @@ tarfs_load_blockmap(struct tarfs_node *tnp, size_t realsize)
 			goto bad;
 		}
 	}
-	free(map, M_TARFSBLK);
+	kfree(map, M_TARFSBLK);
 
 	/* store in node */
-	free(tnp->blk, M_TARFSBLK);
+	kfree(tnp->blk, M_TARFSBLK);
 	tnp->nblk = nblk;
 	tnp->blk = blk;
 	tnp->size = realsize;
@@ -370,8 +373,8 @@ tarfs_load_blockmap(struct tarfs_node *tnp, size_t realsize)
 syntax:
 	TARFS_DPF(MAP, "%s: syntax error in block map\n", __func__);
 bad:
-	free(map, M_TARFSBLK);
-	free(blk, M_TARFSBLK);
+	kfree(map, M_TARFSBLK);
+	kfree(blk, M_TARFSBLK);
 	return (EINVAL);
 }
 
@@ -398,19 +401,19 @@ tarfs_free_node(struct tarfs_node *tnp)
 		break;
 	case VLNK:
 		if (tnp->link.name)
-			free(tnp->link.name, M_TARFSNAME);
+			kfree(tnp->link.name, M_TARFSNAME);
 		break;
 	default:
 		break;
 	}
 	if (tnp->name != NULL)
-		free(tnp->name, M_TARFSNAME);
+		kfree(tnp->name, M_TARFSNAME);
 	if (tnp->blk != NULL)
-		free(tnp->blk, M_TARFSBLK);
+		kfree(tnp->blk, M_TARFSBLK);
 	if (tnp->ino >= TARFS_MININO)
 		free_unr(tmp->ino_unr, tnp->ino);
 	TAILQ_REMOVE(&tmp->allnodes, tnp, entries);
-	free(tnp, M_TARFSNODE);
+	kfree(tnp, M_TARFSNODE);
 	tmp->nfiles--;
 }
 
