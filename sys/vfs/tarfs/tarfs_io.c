@@ -245,7 +245,6 @@ tarfs_zio_update_index(struct tarfs_zio *zio, off_t i, off_t o)
 	KKASSERT(zio->idx[zio->curidx].i == i);
 	KKASSERT(zio->idx[zio->curidx].o == o);
 }
-#endif
 
 /*
  * VOP_ACCESS for zio node.
@@ -309,7 +308,6 @@ tarfs_zgetattr(struct vop_getattr_args *ap)
 	return (error);
 }
 
-#ifdef ZSTDIO
 /*
  * VOP_READ for zio node, zstd edition.
  */
@@ -514,7 +512,6 @@ fail_unlocked:
 	}
 	return (error);
 }
-#endif
 
 /*
  * VOP_READ for zio node.
@@ -594,7 +591,7 @@ tarfs_zstrategy(struct vop_strategy_args *ap)
 	return (0);
 }
 
-static struct vop_ops tarfs_vnodeops = {
+static struct vop_ops tarfs_znodeops = {
 	.vop_default =		vop_defaultop,
 
 	.vop_access =		tarfs_zaccess,
@@ -603,9 +600,7 @@ static struct vop_ops tarfs_vnodeops = {
 	.vop_reclaim =		tarfs_zreclaim,
 	.vop_strategy =		tarfs_zstrategy,
 };
-VFS_VOP_VECTOR_REGISTER(tarfs_znodeops);
 
-#ifdef TARFS_ZIO
 /*
  * Initializes the decompression layer.
  */
