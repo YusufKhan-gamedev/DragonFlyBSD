@@ -140,15 +140,11 @@ tarfs_bmap(struct vop_bmap_args *ap)
 	vp = ap->a_vp;
 	iosize = vp->v_mount->mnt_stat.f_iosize;
 
-	if (ap->a_bop != NULL)
-		*ap->a_bop = &vp->v_bufobj;
-	if (ap->a_bnp != NULL)
-		*ap->a_bnp = ap->a_bn * btodb(iosize);
-	if (ap->a_runp == NULL)
-		return (0);
+	if (ap->a_doffsetp == NULL)
+		return(0);
 
 	tnp = VP_TO_TARFS_NODE(vp);
-	off = ap->a_bn * iosize;
+	off = ap->a_loffset;
 
 	ra = rb = 0;
 	for (u_int i = 0; i < tnp->nblk; i++) {
@@ -212,7 +208,7 @@ tarfs_getattr(struct vop_getattr_args *ap)
 	vap->va_gen = tnp->gen;
 	vap->va_flags = tnp->flags;
 	vap->va_rdev = (vp->v_type == VBLK || vp->v_type == VCHR) ?
-	    tnp->rdev : NODEV;
+	    tnp->rdev : NOUDEV;
 	vap->va_bytes = round_page(tnp->physize);
 	vap->va_filerev = 0;
 
@@ -245,11 +241,11 @@ tarfs_lookup(struct vop_cachedlookup_args *ap)
 	    dirnode, dirnode->name,
 	    (int)cnp->cn_namelen, cnp->cn_nameptr);
 
-	error = VOP_ACCESS(dvp, VEXEC, cnp->cn_cred, curthread);
+	error = VOP_ACCESS(dvp, VEXEC, cnp->cn_cred);
 	if (error != 0)
 		return (error);
 
-	if (cnp->cn_flags & ISDOTDOT) {
+	if (cnp->cn_flags & CNP_ISDOTDOT) {
 		/* Do not allow .. on the root node */
 		if (parent == NULL || parent == dirnode)
 			return (ENOENT);
@@ -260,7 +256,7 @@ tarfs_lookup(struct vop_cachedlookup_args *ap)
 		if (error != 0)
 			return (error);
 	} else if (cnp->cn_namelen == 1 && cnp->cn_nameptr[0] == '.') {
-		VREF(dvp);
+		vref(dvp);
 		*vpp = dvp;
 #ifdef TARFS_DEBUG
 	} else if (dirnode == dirnode->tmp->root &&
@@ -283,7 +279,7 @@ tarfs_lookup(struct vop_cachedlookup_args *ap)
 			return (ENOENT);
 		}
 
-		if ((cnp->cn_flags & ISLASTCN) == 0 &&
+		if ((cnp->cn_flags & CNP_LASTCN) == 0 &&
 		    (tnp->type != VDIR && tnp->type != VLNK))
 			return (ENOTDIR);
 
@@ -298,10 +294,6 @@ tarfs_lookup(struct vop_cachedlookup_args *ap)
 	TARFS_DPF(LOOKUP, "%s: found vnode %p, tarfs_node %p\n", __func__,
 	    *vpp, tnp);
 #endif	/* TARFS_DEBUG */
-
-	/* Store the result of the cache if MAKEENTRY is specified in flags */
-	if ((cnp->cn_flags & MAKEENTRY) != 0 && cnp->cn_nameiop != CREATE)
-		cache_enter(dvp, *vpp, cnp);
 
 	return (error);
 }
@@ -345,7 +337,7 @@ tarfs_readdir(struct vop_readdir_args *ap)
 	if (uio->uio_offset == TARFS_COOKIE_DOT) {
 		TARFS_DPF(VNODE, "%s: Generating . entry\n", __func__);
 		/* fake . entry */
-		cde.d_fileno = tnp->ino;
+		cde.d_ino = tnp->ino;
 		cde.d_type = DT_DIR;
 		cde.d_namlen = 1;
 		cde.d_name[0] = '.';
@@ -367,7 +359,7 @@ tarfs_readdir(struct vop_readdir_args *ap)
 		/* fake .. entry */
 		KKASSERT(tnp->parent != NULL);
 		TARFS_NODE_LOCK(tnp->parent);
-		cde.d_fileno = tnp->parent->ino;
+		cde.d_ino = tnp->parent->ino;
 		TARFS_NODE_UNLOCK(tnp->parent);
 		cde.d_type = DT_DIR;
 		cde.d_namlen = 2;
@@ -404,7 +396,7 @@ tarfs_readdir(struct vop_readdir_args *ap)
 	}
 
 	for (;;) {
-		cde.d_fileno = current->ino;
+		cde.d_ino = current->ino;
 		switch (current->type) {
 		case VBLK:
 			cde.d_type = DT_BLK;
@@ -608,7 +600,7 @@ tarfs_print(struct vop_print_args *ap)
 	    tnp->size);
 
 	if (vp->v_type == VFIFO)
-		fifo_printinfo(vp);
+		vprint(NULL, vp);
 
 	kprintf("\n");
 
@@ -627,7 +619,7 @@ tarfs_strategy(struct vop_strategy_args *ap)
 	int error;
 
 	tnp = VP_TO_TARFS_NODE(ap->a_vp);
-	bp = ap->a_bp;
+	bp = ap->a_bio->bio_buf;
 	KKASSERT(bp->b_iocmd == BIO_READ);
 	KKASSERT(bp->b_iooffset >= 0);
 	KKASSERT(bp->b_bcount > 0);
@@ -636,7 +628,7 @@ tarfs_strategy(struct vop_strategy_args *ap)
 	    tnp->name, (size_t)bp->b_iooffset, bp->b_bcount, bp->b_bufsize);
 	iov.iov_base = bp->b_data;
 	iov.iov_len = bp->b_bcount;
-	off = bp->b_iooffset;
+	off = ap->a_bio->bio_offset;
 	len = bp->b_bcount;
 	bp->b_resid = len;
 	if (off > tnp->size) {
@@ -659,7 +651,7 @@ tarfs_strategy(struct vop_strategy_args *ap)
 	bp->b_resid -= len - auio.uio_resid;
 out:
 	if (error != 0) {
-		bp->b_ioflags |= B_ERROR;
+		ap->a_bio->bio_flags |= B_ERROR;
 		bp->b_error = error;
 	}
 	bp->b_flags |= BIO_DONE;
