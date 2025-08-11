@@ -214,7 +214,7 @@ tarfs_getattr(struct vop_getattr_args *ap)
 }
 
 static int
-tarfs_lookup(struct vop_cachedlookup_args *ap)
+tarfs_lookup(struct vop_old_lookup_args *ap)
 {
 	struct tarfs_mount *tmp;
 	struct tarfs_node *dirnode, *parent, *tnp;
@@ -243,17 +243,7 @@ tarfs_lookup(struct vop_cachedlookup_args *ap)
 	if (error != 0)
 		return (error);
 
-	if (cnp->cn_flags & CNP_ISDOTDOT) {
-		/* Do not allow .. on the root node */
-		if (parent == NULL || parent == dirnode)
-			return (ENOENT);
-
-		/* Allocate a new vnode on the matching entry */
-		error = vn_vget_ino(dvp, parent->ino, cnp->cn_lkflags,
-		    vpp);
-		if (error != 0)
-			return (error);
-	} else if (cnp->cn_namelen == 1 && cnp->cn_nameptr[0] == '.') {
+	if (cnp->cn_namelen == 1 && cnp->cn_nameptr[0] == '.') {
 		vref(dvp);
 		*vpp = dvp;
 #ifdef TARFS_DEBUG
@@ -635,6 +625,7 @@ out:
 	return (0);
 }
 
+#if 0
 static int
 tarfs_vptofh(struct vnode *vp, struct fid *fhp)
 {
@@ -652,16 +643,16 @@ tarfs_vptofh(struct vnode *vp, struct fid *fhp)
 
 	return (0);
 }
+#endif
 
 struct vop_ops tarfs_vnodeops = {
-	.vop_default =		&default_vnodeops,
+	.vop_default =		vop_defaultop,
 
 	.vop_access =		tarfs_access,
 	.vop_bmap =		tarfs_bmap,
-	.vop_cachedlookup =	tarfs_lookup,
+	.vop_old_lookup =	tarfs_lookup,
 	.vop_close =		tarfs_close,
 	.vop_getattr =		tarfs_getattr,
-	.vop_lookup =		vfs_cache_lookup,
 	.vop_open =		tarfs_open,
 	.vop_print =		tarfs_print,
 	.vop_read =		tarfs_read,
@@ -669,5 +660,4 @@ struct vop_ops tarfs_vnodeops = {
 	.vop_readlink =		tarfs_readlink,
 	.vop_reclaim =		tarfs_reclaim,
 	.vop_strategy =		tarfs_strategy,
-	.vop_vptofh =		tarfs_vptofh,
 };
