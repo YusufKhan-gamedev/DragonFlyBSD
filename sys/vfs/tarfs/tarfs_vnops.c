@@ -265,11 +265,15 @@ tarfs_lookup(struct vop_old_lookup_args *ap)
 			return (ENOENT);
 		}
 
+#if 1
+		kprintf("TODO: FIX THIS SO WE DONT GET ENODIR WHEN MOUNT\n");
+#elif
 		if ((cnp->cn_flags & CNP_LASTCN) == 0 &&
 		    (tnp->type != VDIR && tnp->type != VLNK))
 			return (ENOTDIR);
+#endif
 
-		error = VFS_VGET(tmp->vfs, tnp->ino, cnp->cn_lkflags, vpp);
+		error = VFS_VGET(tmp->vfs, NULL, tnp->ino, vpp);
 		if (error != 0)
 			return (error);
 	}
@@ -328,8 +332,7 @@ tarfs_readdir(struct vop_readdir_args *ap)
 		cde.d_namlen = 1;
 		cde.d_name[0] = '.';
 		cde.d_name[1] = '\0';
-		if (error)
-			return (error);
+
 		/* next is .. */
 		uio->uio_offset = TARFS_COOKIE_DOTDOT;
 		ndirents++;
@@ -347,8 +350,7 @@ tarfs_readdir(struct vop_readdir_args *ap)
 		cde.d_name[0] = '.';
 		cde.d_name[1] = '.';
 		cde.d_name[2] = '\0';
-		if (error)
-			return (error);
+
 		/* next is first child */
 		current = TAILQ_FIRST(&tnp->dir.dirhead);
 		if (current == NULL)
@@ -400,8 +402,6 @@ tarfs_readdir(struct vop_readdir_args *ap)
 		KKASSERT(tnp->namelen < sizeof(cde.d_name));
 		(void)memcpy(cde.d_name, current->name, current->namelen);
 		cde.d_name[current->namelen] = '\0';
-		if (error != 0)
-			goto done;
 		ndirents++;
 		/* next sibling */
 		current = TAILQ_NEXT(current, dirents);

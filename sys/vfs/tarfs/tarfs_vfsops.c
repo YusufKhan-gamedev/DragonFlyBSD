@@ -40,7 +40,6 @@
 #include <sys/mount.h>
 #include <sys/mutex.h>
 #include <sys/namei.h>
-#include <sys/priv.h>
 #include <sys/proc.h>
 #include <sys/queue.h>
 #include <sys/sbuf.h>
@@ -49,9 +48,6 @@
 #include <sys/vnode.h>
 
 #include <vm/vm_param.h>
-
-#include <geom/geom.h>
-#include <geom/geom_vfs.h>
 
 #include <vfs/tarfs/tarfs.h>
 #include <vfs/tarfs/tarfs_dbg.h>
@@ -419,7 +415,7 @@ tarfs_free_mount(struct tarfs_mount *tmp)
 	mp->mnt_data = NULL;
 
 	TARFS_DPF(ALLOC, "%s: freeing structure\n", __func__);
-	free(tmp, M_TARFSMNT);
+	kfree(tmp, M_TARFSMNT);
 }
 
 /*
@@ -471,7 +467,7 @@ again:
 			if (exthdr != NULL) {
 				TARFS_DPF(IO, "%s: orphaned extended header at %zu\n",
 				    __func__, TARFS_BLOCKSIZE * (blknum - 1));
-				free(exthdr, M_TEMP);
+				kfree(exthdr, M_TEMP);
 			}
 			TARFS_DPF(IO, "%s: end of archive at %zu\n", __func__,
 			    TARFS_BLOCKSIZE * blknum);
@@ -571,7 +567,7 @@ again:
 		/* read the contents of the exthdr */
 		TARFS_DPF(ALLOC, "%s: %zu-byte extended header at %zu\n",
 		    __func__, sz, TARFS_BLOCKSIZE * (blknum - 1));
-		exthdr = malloc(sz, M_TEMP, M_WAITOK);
+		exthdr = kmalloc(sz, M_TEMP, M_WAITOK);
 		res = tarfs_io_read_buf(tmp, false, exthdr,
 		    TARFS_BLOCKSIZE * blknum, sz);
 		if (res < 0) {
@@ -625,7 +621,7 @@ again:
 				sparse = true;
 				major = strtol(value, &sep, 10);
 				if (sep != eol) {
-					printf("exthdr syntax error\n");
+					kprintf("exthdr syntax error\n");
 					error = EINVAL;
 					goto bad;
 				}
@@ -633,7 +629,7 @@ again:
 				sparse = true;
 				minor = strtol(value, &sep, 10);
 				if (sep != eol) {
-					printf("exthdr syntax error\n");
+					kprintf("exthdr syntax error\n");
 					error = EINVAL;
 					goto bad;
 				}
@@ -642,7 +638,7 @@ again:
 				name = value;
 				namelen = eol - value;
 				if (namelen == 0) {
-					printf("exthdr syntax error\n");
+					kprintf("exthdr syntax error\n");
 					error = EINVAL;
 					goto bad;
 				}
@@ -650,14 +646,14 @@ again:
 				sparse = true;
 				realsize = strtoul(value, &sep, 10);
 				if (sep != eol) {
-					printf("exthdr syntax error\n");
+					kprintf("exthdr syntax error\n");
 					error = EINVAL;
 					goto bad;
 				}
 			} else if (strcmp(key, "SCHILY.fflags") == 0) {
 				flags |= tarfs_strtofflags(value, &sep);
 				if (sep != eol) {
-					printf("exthdr syntax error\n");
+					kprintf("exthdr syntax error\n");
 					error = EINVAL;
 					goto bad;
 				}
@@ -826,7 +822,7 @@ skip:
 	tmp->nblocks = blknum;
 	*blknump = blknum;
 	if (exthdr != NULL) {
-		free(exthdr, M_TEMP);
+		kfree(exthdr, M_TEMP);
 	}
 	if (namebuf != NULL) {
 		sbuf_delete(namebuf);
@@ -838,7 +834,7 @@ eof:
 	goto bad;
 bad:
 	if (exthdr != NULL) {
-		free(exthdr, M_TEMP);
+		kfree(exthdr, M_TEMP);
 	}
 	if (namebuf != NULL) {
 		sbuf_delete(namebuf);
@@ -884,7 +880,7 @@ tarfs_alloc_mount(struct mount *mp, struct vnode *vp,
 	mp->mnt_iosize_max = vp->v_mount->mnt_iosize_max;
 
 	/* Allocate and initialize tarfs mount structure */
-	tmp = malloc(sizeof(*tmp), M_TARFSMNT, M_WAITOK | M_ZERO);
+	tmp = kmalloc(sizeof(*tmp), M_TARFSMNT, M_WAITOK | M_ZERO);
 	TARFS_DPF(ALLOC, "%s: Allocated mount structure\n", __func__);
 	mp->mnt_data = tmp;
 
@@ -911,7 +907,7 @@ tarfs_alloc_mount(struct mount *mp, struct vnode *vp,
 	blknum = 0;
 	do {
 		if ((error = tarfs_alloc_one(tmp, &blknum)) != 0) {
-			printf("unsupported or corrupt tar file at %zu\n",
+			kprintf("unsupported or corrupt tar file at %zu\n",
 			    TARFS_BLOCKSIZE * blknum);
 			goto bad;
 		}
@@ -1107,7 +1103,7 @@ tarfs_root(struct mount *mp, int flags, struct vnode **vpp)
 	if (error != 0)
 		return (error);
 
-	nvp->v_vflag |= VV_ROOT;
+	nvp->v_flag |= VROOT;
 	*vpp = nvp;
 	return (0);
 }
@@ -1187,7 +1183,7 @@ tarfs_vget(struct mount *mp, ino_t ino, int lkflags, struct vnode **vpp)
 	vp->v_type = tnp->type;
 	tnp->vnode = vp;
 
-	lockmgr(vp->v_vnlock, lkflags, NULL);
+	lockmgr(vp->v_vnlock, lkflags);
 	error = insmntque(vp, mp);
 	if (error != 0)
 		goto bad;
@@ -1218,7 +1214,7 @@ tarfs_fhtovp(struct mount *mp, struct fid *fhp, int flags, struct vnode **vpp)
 	if (tfp->ino < TARFS_ROOTINO || tfp->ino > INT_MAX)
 		return (ESTALE);
 
-	error = VFS_VGET(mp, tfp->ino, LK_EXCLUSIVE, &nvp);
+	error = VFS_VGET(mp, NULL, tfp->ino, &nvp);
 	if (error != 0) {
 		*vpp = NULLVP;
 		return (error);
