@@ -121,14 +121,18 @@ tarfs_io_read(struct tarfs_mount *tmp, bool raw, struct uio *uiop)
 	int error;
 
 	if (raw || tmp->znode == NULL) {
+#ifdef _DRAGONFLY_OS_H_
 		rl = vn_rangelock_rlock(tmp->vp, off, off + len);
+#endif
 		error = vn_lock(tmp->vp, LK_SHARED);
 		if (error == 0) {
 			error = VOP_READ(tmp->vp, uiop, IO_NODELOCKED,
 			    uiop->uio_td->td_ucred);
 			vn_unlock(tmp->vp);
 		}
+#ifdef _DRAGONFLY_OS_H_
 		vn_rangelock_unlock(tmp->vp, rl);
+#endif
 	} else {
 		error = vn_lock(tmp->znode, LK_EXCLUSIVE);
 		if (error == 0) {
@@ -395,7 +399,9 @@ tarfs_zread_zstd(struct tarfs_zio *zio, struct uio *uiop)
 	zob.pos = 0;
 
 	/* lock tarball */
+#ifdef _DRAGONFLY_OS_H_
 	rl = vn_rangelock_rlock(tmp->vp, zio->ipos, OFF_MAX);
+#endif
 	error = vn_lock(tmp->vp, LK_SHARED);
 	if (error != 0) {
 		goto fail_unlocked;
@@ -495,8 +501,10 @@ fail_unlocked:
 		TARFS_DPF(BOUNCE, "%s: freeing bounce buffer\n", __func__);
 		kfree(obuf, M_TEMP);
 	}
+#ifdef _DRAGONFLY_OS_H_
 	if (rl != NULL)
 		vn_rangelock_unlock(tmp->vp, rl);
+#endif
 	if (ibuf != NULL)
 		kfree(ibuf, M_TEMP);
 	TARFS_DPF(ZIO, "%s(%zu, %zu) = %d (resid %zd)\n", __func__,
