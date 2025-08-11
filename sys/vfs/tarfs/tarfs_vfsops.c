@@ -1194,7 +1194,6 @@ tarfs_vget(struct mount *mp, ino_t ino, int lkflags, struct vnode **vpp)
 	if (error != 0 || *vpp != NULL)
 		return (error);
 
-	vn_set_state(vp, VSTATE_CONSTRUCTED);
 	*vpp = vp;
 	return (0);
 
