@@ -62,8 +62,7 @@ tarfs_open(struct vop_open_args *ap)
 	if (vp->v_type != VREG && vp->v_type != VDIR)
 		return (EOPNOTSUPP);
 
-	vnode_create_vobject(vp, tnp->size, ap->a_td);
-	return (0);
+	return (vop_stdopen(ap));
 }
 
 static int
@@ -204,7 +203,6 @@ tarfs_getattr(struct vop_getattr_args *ap)
 	vap->va_atime = tnp->atime;
 	vap->va_ctime = tnp->ctime;
 	vap->va_mtime = tnp->mtime;
-	vap->va_birthtime = tnp->birthtime;
 	vap->va_gen = tnp->gen;
 	vap->va_flags = tnp->flags;
 	vap->va_rdev = (vp->v_type == VBLK || vp->v_type == VCHR) ?
@@ -638,15 +636,15 @@ out:
 }
 
 static int
-tarfs_vptofh(struct vop_vptofh_args *ap)
+tarfs_vptofh(struct vnode *vp, struct fid *fhp)
 {
 	struct tarfs_fid *tfp;
 	struct tarfs_node *tnp;
 	_Static_assert(sizeof(struct tarfs_fid) <= sizeof(struct fid),
 	    "struct tarfs_fid cannot be larger than struct fid");
 
-	tfp = (struct tarfs_fid *)ap->a_fhp;
-	tnp = VP_TO_TARFS_NODE(ap->a_vp);
+	tfp = (struct tarfs_fid *)fhp;
+	tnp = VP_TO_TARFS_NODE(vp);
 
 	tfp->len = sizeof(struct tarfs_fid);
 	tfp->ino = tnp->ino;
