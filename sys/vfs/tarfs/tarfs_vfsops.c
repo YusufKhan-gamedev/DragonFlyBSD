@@ -963,6 +963,8 @@ tarfs_mount(struct mount *mp)
 	    vfs_scanopt(mp->mnt_optnew, "mode", "%ho", &root_mode) != 1)
 		root_mode = va.va_mode;
 
+	vfs_add_vnodeops(mp, &tarfs_vnodeops, &mp->mnt_vn_norm_ops);
+
 	error = vfs_getopt(mp->mnt_optnew, "from", (void **)&from, &len);
 	if (error != 0 || from[len - 1] != '\0')
 		return (EINVAL);
@@ -1177,7 +1179,7 @@ tarfs_vget(struct mount *mp, ino_t ino, int lkflags, struct vnode **vpp)
 	if (tnp == NULL)
 		return (ENOENT);
 
-	(void)getnewvnode("tarfs", mp, &tarfs_vnodeops, &vp);
+	(void)getnewvnode(VT_TARFS, mp,	&vp, VLKTIMEOUT, LK_CANRECURSE);
 	TARFS_DPF(FS, "%s: allocated vnode\n", __func__);
 	vp->v_data = tnp;
 	vp->v_type = tnp->type;
