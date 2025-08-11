@@ -29,6 +29,7 @@
 #include "opt_tarfs.h"
 
 #include <sys/param.h>
+#include <sys/caps.h>
 #include <sys/systm.h>
 #include <sys/buf.h>
 #include <sys/conf.h>
@@ -39,6 +40,7 @@
 #include <sys/malloc.h>
 #include <sys/mount.h>
 #include <sys/mutex.h>
+#include <sys/nlookup.h>
 #include <sys/namei.h>
 #include <sys/proc.h>
 #include <sys/queue.h>
@@ -1072,7 +1074,7 @@ tarfs_unmount(struct mount *mp, int mntflags)
 		flags |= FORCECLOSE;
 
 	/* Finalize all pending I/O */
-	error = vflush(mp, 0, flags, curthread);
+	error = vflush(mp, 0, flags);
 	if (error != 0)
 		return (error);
 	tmp = MP_TO_TARFS_MOUNT(mp);
