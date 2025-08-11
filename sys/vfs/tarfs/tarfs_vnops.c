@@ -342,11 +342,6 @@ tarfs_readdir(struct vop_readdir_args *ap)
 		cde.d_namlen = 1;
 		cde.d_name[0] = '.';
 		cde.d_name[1] = '\0';
-		cde.d_reclen = GENERIC_DIRSIZ(&cde);
-		if (cde.d_reclen > uio->uio_resid)
-			goto full;
-		dirent_terminate(&cde);
-		error = uiomove(&cde, cde.d_reclen, uio);
 		if (error)
 			return (error);
 		/* next is .. */
@@ -366,11 +361,6 @@ tarfs_readdir(struct vop_readdir_args *ap)
 		cde.d_name[0] = '.';
 		cde.d_name[1] = '.';
 		cde.d_name[2] = '\0';
-		cde.d_reclen = GENERIC_DIRSIZ(&cde);
-		if (cde.d_reclen > uio->uio_resid)
-			goto full;
-		dirent_terminate(&cde);
-		error = uiomove(&cde, cde.d_reclen, uio);
 		if (error)
 			return (error);
 		/* next is first child */
@@ -424,11 +414,6 @@ tarfs_readdir(struct vop_readdir_args *ap)
 		KKASSERT(tnp->namelen < sizeof(cde.d_name));
 		(void)memcpy(cde.d_name, current->name, current->namelen);
 		cde.d_name[current->namelen] = '\0';
-		cde.d_reclen = GENERIC_DIRSIZ(&cde);
-		if (cde.d_reclen > uio->uio_resid)
-			goto full;
-		dirent_terminate(&cde);
-		error = uiomove(&cde, cde.d_reclen, uio);
 		if (error != 0)
 			goto done;
 		ndirents++;
@@ -439,12 +424,6 @@ tarfs_readdir(struct vop_readdir_args *ap)
 		uio->uio_offset = current->ino;
 		TARFS_DPF(VNODE, "%s: [%u] setting current node to %p=%s\n",
 		    __func__, ndirents, current, current->name);
-	}
-full:
-	if (cde.d_reclen > uio->uio_resid) {
-		TARFS_DPF(VNODE, "%s: out of space, returning\n",
-		    __func__);
-		error = (ndirents == 0) ? EINVAL : 0;
 	}
 done:
 	TARFS_DPF(VNODE, "%s: %u entries written\n", __func__, ndirents);
