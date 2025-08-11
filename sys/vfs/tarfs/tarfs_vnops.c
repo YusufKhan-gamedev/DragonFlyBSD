@@ -205,8 +205,6 @@ tarfs_getattr(struct vop_getattr_args *ap)
 	vap->va_mtime = tnp->mtime;
 	vap->va_gen = tnp->gen;
 	vap->va_flags = tnp->flags;
-	vap->va_rdev = (vp->v_type == VBLK || vp->v_type == VCHR) ?
-	    tnp->rdev : NOUDEV;
 	vap->va_bytes = round_page(tnp->physize);
 	vap->va_filerev = 0;
 
@@ -303,7 +301,7 @@ tarfs_readdir(struct vop_readdir_args *ap)
 	vp = ap->a_vp;
 	uio = ap->a_uio;
 	eofflag = ap->a_eofflag;
-	cookies = ap->a_cookies;
+	cookies = (uint64_t **)ap->a_cookies;
 	ncookies = ap->a_ncookies;
 
 	if (vp->v_type != VDIR)
