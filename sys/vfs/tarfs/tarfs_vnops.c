@@ -38,6 +38,7 @@
 #include <sys/mount.h>
 #include <sys/namei.h>
 #include <sys/proc.h>
+#include <sys/vfsops.h>
 #include <sys/vnode.h>
 #include <sys/malloc.h>
 #include <sys/uio.h>

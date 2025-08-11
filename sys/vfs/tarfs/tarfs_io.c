@@ -115,9 +115,6 @@ struct tarfs_zstd {
 int
 tarfs_io_read(struct tarfs_mount *tmp, bool raw, struct uio *uiop)
 {
-	void *rl = NULL;
-	off_t off = uiop->uio_offset;
-	size_t len = uiop->uio_resid;
 	int error;
 
 	if (raw || tmp->znode == NULL) {
