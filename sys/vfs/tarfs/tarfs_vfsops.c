@@ -1004,11 +1004,24 @@ tarfs_mount(struct mount *mp, char *path, caddr_t data, struct ucred *cred)
 	if (args.verify) {
 		/* XXX: Doesnt do anything because no O_VERIFY */
 	}
+#if 0
 	NDINIT(&nd, LOOKUP, ISOPEN | FOLLOW | LOCKLEAF, UIO_SYSSPACE, from);
 	error = namei(&nd);
 	if (error != 0)
 		return (error);
 	NDFREE_PNBUF(&nd);
+#endif
+
+	vp = NULL;
+	error = nlookup_init(&nd, args.from, UIO_USERSPACE, NLC_FOLLOW);
+	if (error == 0)
+		error = nlookup(&nd);
+	if (error == 0)
+		error = cache_vref(&nd.nl_nch, nd.nl_cred, &vp);
+	nlookup_done(&nd);
+	if (error)
+		return (error);
+
 	vp = nd.ni_vp;
 	TARFS_DPF(FS, "%s: N: hold %u use %u lock 0x%x\n", __func__,
 	    vp->v_holdcnt, vp->v_usecount, VOP_ISLOCKED(vp));
@@ -1056,7 +1069,7 @@ tarfs_mount(struct mount *mp, char *path, caddr_t data, struct ucred *cred)
 	vfs_getnewfsid(mp);
 
 	copyinstr(args.from, mp->mnt_stat.f_mntfromname, MNAMELEN - 1, &len);
-	bzero(mp->mnt_stat.f_mntfromname + len, MNAMELEN - size);
+	bzero(mp->mnt_stat.f_mntfromname + len, MNAMELEN - len);
 	tarfs_statfs(mp, &mp->mnt_stat, cred);
 
 	vfs_add_vnodeops(mp, &tarfs_vnodeops, &mp->mnt_vn_norm_ops);
