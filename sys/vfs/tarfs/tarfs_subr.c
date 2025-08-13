@@ -56,8 +56,6 @@ SYSCTL_NODE(_vfs, OID_AUTO, tarfs, CTLFLAG_RW, 0, "Tar filesystem");
 
 unsigned int tarfs_ioshift = TARFS_IOSHIFT_DEFAULT;
 
-static const char zero_region[ZERO_REGION_SIZE] = { 0 };
-
 static int
 tarfs_sysctl_handle_ioshift(SYSCTL_HANDLER_ARGS)
 {

@@ -45,7 +45,12 @@ struct componentname;
 struct mount;
 struct vnode;
 
-#define ZERO_REGION_SIZE (2^20)
+/* XXX: Tune for performance, larger allocation, more performance */
+#define ZERO_REGION_SIZE (1U << 9)
+
+static const char zero_region[ZERO_REGION_SIZE] = { 0 };
+
+#define ASSERT_VOP_LOCKED(vp, str)  KASSERT(vn_islocked(vp), (str))
 
 /*
  * Internal representation of a tarfs file system node.
@@ -143,6 +148,15 @@ struct tarfs_mount {
 
 	struct tarfs_zio	*zio;
 	struct vnode		*znode;
+};
+
+struct tarfs_args {
+	char *from;
+	char *as;
+	uid_t root_uid;
+	gid_t root_gid;
+	mode_t root_mode;
+	int verify;
 };
 
 struct tarfs_zio {

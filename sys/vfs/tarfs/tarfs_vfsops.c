@@ -29,8 +29,9 @@
 #include "opt_tarfs.h"
 
 #include <sys/param.h>
-#include <sys/caps.h>
 #include <sys/systm.h>
+#include <sys/cdefs.h>
+#include <sys/caps.h>
 #include <sys/buf.h>
 #include <sys/conf.h>
 #include <sys/fcntl.h>
@@ -38,8 +39,9 @@
 #include <sys/limits.h>
 #include <sys/lock.h>
 #include <sys/malloc.h>
+#include <sys/kernel.h>
 #include <sys/mount.h>
-#include <sys/mutex.h>
+#include <sys/mutex2.h>
 #include <sys/nlookup.h>
 #include <sys/namei.h>
 #include <sys/proc.h>
@@ -48,6 +50,7 @@
 #include <sys/stat.h>
 #include <sys/uio.h>
 #include <sys/vnode.h>
+#include <sys/vfsops.h>
 
 #include <vm/vm_param.h>
 
@@ -348,7 +351,7 @@ tarfs_lookup_path(struct tarfs_mount *tmp, char *name, size_t namelen,
 			    (int)cn.cn_namelen, cn.cn_nameptr);
 			error = tarfs_alloc_node(tmp, cn.cn_nameptr,
 			    cn.cn_namelen, VDIR, -1, 0, tmp->mtime, 0, 0,
-			    DEFDIRMODE, 0, NULL, NODEV, parent, &tnp);
+			    DEFDIRMODE, 0, NULL, NOUDEV, parent, &tnp);
 			if (error != 0)
 				break;
 		}
@@ -405,7 +408,7 @@ tarfs_free_mount(struct tarfs_mount *tmp)
 	TARFS_DPF(ALLOC, "%s: Freeing mount structure %p\n", __func__, tmp);
 
 	TARFS_DPF(ALLOC, "%s: freeing tarfs_node structures\n", __func__);
-	TAILQ_FOREACH_SAFE(tnp, &tmp->allnodes, entries, tnp_next) {
+	TAILQ_FOREACH_MUTABLE(tnp, &tmp->allnodes, entries, tnp_next) {
 		tarfs_free_node(tnp);
 	}
 
@@ -547,7 +550,7 @@ again:
 		goto bad;
 	}
 	mtime = num;
-	rdev = NODEV;
+	rdev = NOUDEV;
 	TARFS_DPF(ALLOC, "%s: [%c] %zu @%jd %o %d:%d\n", __func__,
 	    hdrp->typeflag[0], sz, (intmax_t)mtime, mode, uid, gid);
 
@@ -783,7 +786,7 @@ again:
 			goto bad;
 		}
 		minor = num;
-		rdev = makedev(major, minor);
+
 		error = tarfs_alloc_node(tmp, namep, sep - namep, VBLK,
 		    0, 0, mtime, uid, gid, mode, flags, NULL, rdev,
 		    parent, &tnp);
@@ -805,7 +808,7 @@ again:
 			goto bad;
 		}
 		minor = num;
-		rdev = makedev(major, minor);
+
 		error = tarfs_alloc_node(tmp, namep, sep - namep, VCHR,
 		    0, 0, mtime, uid, gid, mode, flags, NULL, rdev,
 		    parent, &tnp);
@@ -856,7 +859,6 @@ tarfs_alloc_mount(struct mount *mp, struct vnode *vp,
     struct tarfs_mount **tmpp)
 {
 	struct vattr va;
-	struct thread *td = curthread;
 	struct tarfs_mount *tmp;
 	struct tarfs_node *root;
 	size_t blknum;
@@ -872,7 +874,7 @@ tarfs_alloc_mount(struct mount *mp, struct vnode *vp,
 	    __func__, vp);
 
 	/* Get source metadata */
-	error = VOP_GETATTR(vp, &va, td->td_ucred);
+	error = VOP_GETATTR(vp, &va);
 	if (error != 0) {
 		return (error);
 	}
@@ -884,10 +886,9 @@ tarfs_alloc_mount(struct mount *mp, struct vnode *vp,
 	/* Allocate and initialize tarfs mount structure */
 	tmp = kmalloc(sizeof(*tmp), M_TARFSMNT, M_WAITOK | M_ZERO);
 	TARFS_DPF(ALLOC, "%s: Allocated mount structure\n", __func__);
-	mp->mnt_data = tmp;
+	mp->mnt_data = (qaddr_t)tmp;
 
-	mtx_init(&tmp->allnode_lock, "tarfs allnode lock", NULL,
-	    MTX_DEF);
+	lockinit(&tmp->allnode_lock, "tarfs allnode lock", 0, LK_CANRECURSE);
 	TAILQ_INIT(&tmp->allnodes);
 	tmp->ino_unr = new_unrhdr(TARFS_MININO, INT_MAX, &tmp->allnode_lock);
 	tmp->vp = vp;
@@ -901,7 +902,7 @@ tarfs_alloc_mount(struct mount *mp, struct vnode *vp,
 		goto bad;
 
 	error = tarfs_alloc_node(tmp, NULL, 0, VDIR, 0, 0, mtime, root_uid,
-	    root_gid, root_mode & ALLPERMS, 0, NULL, NODEV, NULL, &root);
+	    root_gid, root_mode & ALLPERMS, 0, NULL, NOUDEV, NULL, &root);
 	if (error != 0 || root == NULL)
 		goto bad;
 	tmp->root = root;
@@ -930,18 +931,19 @@ bad:
  */
 
 static int
-tarfs_mount(struct mount *mp)
+tarfs_mount(struct mount *mp, char *path, caddr_t data, struct ucred *cred)
 {
-	struct nameidata nd;
+	struct tarfs_args args;
+	struct nlookupdata nd;
 	struct vattr va;
 	struct tarfs_mount *tmp = NULL;
-	struct thread *td = curthread;
 	struct vnode *vp;
 	char *as, *from;
 	uid_t root_uid;
 	gid_t root_gid;
 	mode_t root_mode;
-	int error, flags, aslen, len;
+	int error, flags;
+	size_t aslen, len;
 
 	if (mp->mnt_flag & MNT_UPDATE)
 		return (EOPNOTSUPP);
@@ -949,12 +951,11 @@ tarfs_mount(struct mount *mp)
 	if (vfs_filteropt(mp->mnt_optnew, tarfs_opts))
 		return (EINVAL);
 
-	vn_lock(mp->mnt_vnodecovered, LK_SHARED | LK_RETRY);
-	error = VOP_GETATTR(mp->mnt_vnodecovered, &va, mp->mnt_cred);
-	vn_unlock(mp->mnt_vnodecovered);
+	error = VOP_GETATTR(vp, &va);
 	if (error)
 		return (error);
 
+#if 0
 	if (mp->mnt_cred->cr_ruid != 0 ||
 	    vfs_scanopt(mp->mnt_optnew, "gid", "%d", &root_gid) != 1)
 		root_gid = va.va_gid;
@@ -965,7 +966,8 @@ tarfs_mount(struct mount *mp)
 	    vfs_scanopt(mp->mnt_optnew, "mode", "%ho", &root_mode) != 1)
 		root_mode = va.va_mode;
 
-	vfs_add_vnodeops(mp, &tarfs_vnodeops, &mp->mnt_vn_norm_ops);
+	if (!path)
+		return (EINVAL);
 
 	error = vfs_getopt(mp->mnt_optnew, "from", (void **)&from, &len);
 	if (error != 0 || from[len - 1] != '\0')
@@ -973,14 +975,33 @@ tarfs_mount(struct mount *mp)
 	error = vfs_getopt(mp->mnt_optnew, "as", (void **)&as, &aslen);
 	if (error != 0 || as[aslen - 1] != '\0')
 		as = from;
+#endif
+
+	if ((error = copyin(data, (caddr_t)&args, sizeof (struct tarfs_args))) != 0)
+		return (error);
+
+	root_uid  = (args.root_uid  != (uid_t)-1) ? args.root_uid  : va.va_uid;
+	root_gid  = (args.root_gid  != (gid_t)-1) ? args.root_gid  : va.va_gid;
+	root_mode = (args.root_mode != (mode_t)-1)? args.root_mode : va.va_mode;
+
+	if ((error = copyinstr(args.from, path, MAXPATHLEN, &len)) != 0)
+		return (error);
+	if (args.from[len - 1] != '\0')
+		return (EINVAL);
+	from = args.from;
+        if ((error = copyinstr(args.from, path, MAXPATHLEN, &aslen)) != 0)
+                as = from;
+        if (args.from[aslen - 1] != '\0')
+                return (EINVAL);
+	as = args.as;
 
 	/* Find the source tarball */
 	TARFS_DPF(FS, "%s(%s%s%s, uid=%u, gid=%u, mode=%o)\n", __func__,
 	    from, (as != from) ? " as " : "", (as != from) ? as : "",
 	    root_uid, root_gid, root_mode);
 	flags = FREAD;
-	if (vfs_flagopt(mp->mnt_optnew, "verify", NULL, 0)) {
-	    flags |= O_VERIFY;
+	if (args.verify) {
+		/* XXX: Doesnt do anything because no O_VERIFY */
 	}
 	NDINIT(&nd, LOOKUP, ISOPEN | FOLLOW | LOCKLEAF, UIO_SYSSPACE, from);
 	error = namei(&nd);
@@ -1007,11 +1028,6 @@ tarfs_mount(struct mount *mp)
 		error = EOPNOTSUPP;
 		goto bad_open_locked;
 	}
-	error = priv_check(td, PRIV_VFS_MOUNT_PERM);
-	if (error != 0) {
-		TARFS_DPF(FS, "%s: not permitted to mount\n", __func__);
-		goto bad_open_locked;
-	}
 	if (flags & O_VERIFY) {
 		mp->mnt_flag |= MNT_VERIFIED;
 	}
@@ -1027,13 +1043,17 @@ tarfs_mount(struct mount *mp)
 	TARFS_DPF(FS, "%s: M: hold %u use %u lock 0x%x\n", __func__,
 	    vp->v_holdcnt, vp->v_usecount, VOP_ISLOCKED(vp));
 
-	/* Unconditionally mount as read-only */
-	MNT_ILOCK(mp);
+#if 0 /* XXX */
+	mp->mnt_maxsymlinklen = EXT2_MAXSYMLINKLEN;
+#endif
 	mp->mnt_flag |= (MNT_LOCAL | MNT_RDONLY);
-	MNT_IUNLOCK(mp);
+	mp->mnt_kern_flag |= MNTK_ALL_MPSAFE;
 
 	vfs_getnewfsid(mp);
 	vfs_mountedfrom(mp, as);
+
+	vfs_add_vnodeops(mp, &tarfs_vnodeops, &mp->mnt_vn_norm_ops);
+
 	TARFS_DPF(FS, "%s: success\n", __func__);
 
 	return (0);
@@ -1047,7 +1067,7 @@ bad_open_unlocked:
 	/* vp must be held and unlocked */
 	TARFS_DPF(FS, "%s: E: hold %u use %u lock 0x%x\n", __func__,
 	    vp->v_holdcnt, vp->v_usecount, VOP_ISLOCKED(vp));
-	(void)vn_close(vp, flags, td->td_ucred, td);
+	(void)vn_close(vp, flags, td);
 bad:
 	/* vp must be released and unlocked */
 	TARFS_DPF(FS, "%s: X: hold %u use %u lock 0x%x\n", __func__,
@@ -1083,7 +1103,7 @@ tarfs_unmount(struct mount *mp, int mntflags)
 	KKASSERT(vp != NULL);
 	TARFS_DPF(FS, "%s: U: hold %u use %u lock 0x%x\n", __func__,
 	    vp->v_holdcnt, vp->v_usecount, VOP_ISLOCKED(vp));
-	vn_close(vp, FREAD, td->td_ucred, td);
+	vn_close(vp, FREAD, td);
 	TARFS_DPF(FS, "%s: C: hold %u use %u lock 0x%x\n", __func__,
 	    vp->v_holdcnt, vp->v_usecount, VOP_ISLOCKED(vp));
 	tarfs_free_mount(tmp);
@@ -1096,7 +1116,7 @@ tarfs_unmount(struct mount *mp, int mntflags)
  * positive errno value on failure.
  */
 static int
-tarfs_root(struct mount *mp, int flags, struct vnode **vpp)
+tarfs_root(struct mount *mp, struct vnode **vpp)
 {
 	struct vnode *nvp;
 	int error;
@@ -1116,7 +1136,7 @@ tarfs_root(struct mount *mp, int flags, struct vnode **vpp)
  * Gets statistics for a tarfs filesystem.  Returns 0.
  */
 static int
-tarfs_statfs(struct mount *mp, struct statfs *sbp)
+tarfs_statfs(struct mount *mp, struct statfs *sbp, struct ucred *cred)
 {
 	struct tarfs_mount *tmp;
 
@@ -1139,7 +1159,7 @@ tarfs_statfs(struct mount *mp, struct statfs *sbp)
  * failure.
  */
 static int
-tarfs_vget(struct mount *mp, ino_t ino, int lkflags, struct vnode **vpp)
+tarfs_vget(struct mount *mp, struct vnode *dvp, ino_t ino, struct vnode **vpp)
 {
 	struct tarfs_mount *tmp;
 	struct tarfs_node *tnp;
@@ -1187,7 +1207,7 @@ tarfs_vget(struct mount *mp, ino_t ino, int lkflags, struct vnode **vpp)
 	vp->v_type = tnp->type;
 	tnp->vnode = vp;
 
-	lockmgr(vp->v_vnlock, lkflags);
+	lockmgr(&vp->v_lock, lkflags);
 	error = insmntque(vp, mp);
 	if (error != 0)
 		goto bad;
@@ -1205,7 +1225,7 @@ bad:
 }
 
 static int
-tarfs_fhtovp(struct mount *mp, struct fid *fhp, int flags, struct vnode **vpp)
+tarfs_fhtovp(struct mount *mp, struct vnode *rootvp, struct fid *fhp, struct vnode **vpp)
 {
 	struct tarfs_node *tnp;
 	struct tarfs_fid *tfp;
