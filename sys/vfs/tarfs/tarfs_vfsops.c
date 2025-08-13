@@ -1027,7 +1027,7 @@ tarfs_mount(struct mount *mp, char *path, caddr_t data, struct ucred *cred)
 	/* vp is now held and locked */
 
 	/* Open the source tarball */
-	error = vn_open_vnode(vp, flags, td->td_ucred, td, NULL);
+	error = vn_open(&nd, NULL, flags, 0);
 	if (error != 0) {
 		TARFS_DPF(FS, "%s: failed to open %s: %d\n", __func__,
 		    from, error);
