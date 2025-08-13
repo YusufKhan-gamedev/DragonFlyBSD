@@ -952,10 +952,6 @@ tarfs_mount(struct mount *mp, char *path, caddr_t data, struct ucred *cred)
 	if (mp->mnt_flag & MNT_UPDATE)
 		return (EOPNOTSUPP);
 
-	error = VOP_GETATTR(vp, &va);
-	if (error)
-		return (error);
-
 #if 0
 	if (mp->mnt_cred->cr_ruid != 0 ||
 	    vfs_scanopt(mp->mnt_optnew, "gid", "%d", &root_gid) != 1)
@@ -981,10 +977,6 @@ tarfs_mount(struct mount *mp, char *path, caddr_t data, struct ucred *cred)
 	if ((error = copyin(data, (caddr_t)&args, sizeof (struct tarfs_args))) != 0)
 		return (error);
 
-	root_uid  = (args.root_uid  != (uid_t)-1) ? args.root_uid  : va.va_uid;
-	root_gid  = (args.root_gid  != (gid_t)-1) ? args.root_gid  : va.va_gid;
-	root_mode = (args.root_mode != (mode_t)-1)? args.root_mode : va.va_mode;
-
 	if ((error = copyinstr(args.from, path, MAXPATHLEN, &len)) != 0)
 		return (error);
 	if (args.from == NULL || args.from[len - 1] != '\0')
@@ -996,10 +988,6 @@ tarfs_mount(struct mount *mp, char *path, caddr_t data, struct ucred *cred)
                 return (EINVAL);
 	as = args.as;
 
-	/* Find the source tarball */
-	TARFS_DPF(FS, "%s(%s%s%s, uid=%u, gid=%u, mode=%o)\n", __func__,
-	    from, (as != from) ? " as " : "", (as != from) ? as : "",
-	    root_uid, root_gid, root_mode);
 	flags = FREAD;
 	if (args.verify) {
 		/* XXX: Doesnt do anything because no O_VERIFY */
@@ -1021,6 +1009,19 @@ tarfs_mount(struct mount *mp, char *path, caddr_t data, struct ucred *cred)
 	nlookup_done(&nd);
 	if (error)
 		return (error);
+
+        error = VOP_GETATTR(vp, &va);
+        if (error)
+                return (error);
+
+        root_uid  = (args.root_uid  != (uid_t)-1) ? args.root_uid  : va.va_uid;
+        root_gid  = (args.root_gid  != (gid_t)-1) ? args.root_gid  : va.va_gid;
+        root_mode = (args.root_mode != (mode_t)-1)? args.root_mode : va.va_mode;
+
+        /* Find the source tarball */
+        TARFS_DPF(FS, "%s(%s%s%s, uid=%u, gid=%u, mode=%o)\n", __func__,
+            from, (as != from) ? " as " : "", (as != from) ? as : "",
+            root_uid, root_gid, root_mode);
 
 	TARFS_DPF(FS, "%s: N: hold %u use %u lock 0x%x\n", __func__,
 	    vp->v_holdcnt, vp->v_usecount, VOP_ISLOCKED(vp));
