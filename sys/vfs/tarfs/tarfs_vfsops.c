@@ -111,10 +111,14 @@ static vfs_root_t	tarfs_root;
 static vfs_statfs_t	tarfs_statfs;
 static vfs_fhtovp_t	tarfs_fhtovp;
 
+
+#if 0
+/* For reference, from FreeBSD original */
 static const char *tarfs_opts[] = {
 	"as", "from", "gid", "mode", "uid", "verify",
 	NULL
 };
+#endif
 
 /*
  * Reads a len-width signed octal number from strp.  Returns 0 on success
@@ -948,9 +952,6 @@ tarfs_mount(struct mount *mp, char *path, caddr_t data, struct ucred *cred)
 	if (mp->mnt_flag & MNT_UPDATE)
 		return (EOPNOTSUPP);
 
-	if (vfs_filteropt(mp->mnt_optnew, tarfs_opts))
-		return (EINVAL);
-
 	error = VOP_GETATTR(vp, &va);
 	if (error)
 		return (error);
@@ -986,12 +987,12 @@ tarfs_mount(struct mount *mp, char *path, caddr_t data, struct ucred *cred)
 
 	if ((error = copyinstr(args.from, path, MAXPATHLEN, &len)) != 0)
 		return (error);
-	if (args.from[len - 1] != '\0')
+	if (args.from == NULL || args.from[len - 1] != '\0')
 		return (EINVAL);
 	from = args.from;
         if ((error = copyinstr(args.from, path, MAXPATHLEN, &aslen)) != 0)
                 as = from;
-        if (args.from[aslen - 1] != '\0')
+        if (args.as == NULL || args.from[aslen - 1] != '\0')
                 return (EINVAL);
 	as = args.as;
 
@@ -1028,9 +1029,12 @@ tarfs_mount(struct mount *mp, char *path, caddr_t data, struct ucred *cred)
 		error = EOPNOTSUPP;
 		goto bad_open_locked;
 	}
+#if 0
+	/* XXX */
 	if (flags & O_VERIFY) {
 		mp->mnt_flag |= MNT_VERIFIED;
 	}
+#endif
 
 	/* Allocate the tarfs mount */
 	error = tarfs_alloc_mount(mp, vp, root_uid, root_gid, root_mode, &tmp);
@@ -1050,7 +1054,10 @@ tarfs_mount(struct mount *mp, char *path, caddr_t data, struct ucred *cred)
 	mp->mnt_kern_flag |= MNTK_ALL_MPSAFE;
 
 	vfs_getnewfsid(mp);
-	vfs_mountedfrom(mp, as);
+
+	copyinstr(args.from, mp->mnt_stat.f_mntfromname, MNAMELEN - 1, &len);
+	bzero(mp->mnt_stat.f_mntfromname + len, MNAMELEN - size);
+	tarfs_statfs(mp, &mp->mnt_stat, cred);
 
 	vfs_add_vnodeops(mp, &tarfs_vnodeops, &mp->mnt_vn_norm_ops);
 
@@ -1067,7 +1074,7 @@ bad_open_unlocked:
 	/* vp must be held and unlocked */
 	TARFS_DPF(FS, "%s: E: hold %u use %u lock 0x%x\n", __func__,
 	    vp->v_holdcnt, vp->v_usecount, VOP_ISLOCKED(vp));
-	(void)vn_close(vp, flags, td);
+	(void)vn_close(vp, flags, NULL);
 bad:
 	/* vp must be released and unlocked */
 	TARFS_DPF(FS, "%s: X: hold %u use %u lock 0x%x\n", __func__,
@@ -1081,7 +1088,6 @@ bad:
 static int
 tarfs_unmount(struct mount *mp, int mntflags)
 {
-	struct thread *td = curthread;
 	struct tarfs_mount *tmp;
 	struct vnode *vp;
 	int error;
@@ -1103,7 +1109,7 @@ tarfs_unmount(struct mount *mp, int mntflags)
 	KKASSERT(vp != NULL);
 	TARFS_DPF(FS, "%s: U: hold %u use %u lock 0x%x\n", __func__,
 	    vp->v_holdcnt, vp->v_usecount, VOP_ISLOCKED(vp));
-	vn_close(vp, FREAD, td);
+	vn_close(vp, FREAD, NULL);
 	TARFS_DPF(FS, "%s: C: hold %u use %u lock 0x%x\n", __func__,
 	    vp->v_holdcnt, vp->v_usecount, VOP_ISLOCKED(vp));
 	tarfs_free_mount(tmp);
@@ -1123,7 +1129,7 @@ tarfs_root(struct mount *mp, struct vnode **vpp)
 
 	TARFS_DPF(FS, "%s: Getting root vnode\n", __func__);
 
-	error = VFS_VGET(mp, TARFS_ROOTINO, LK_EXCLUSIVE, &nvp);
+	error = VFS_VGET(mp, NULL, TARFS_ROOTINO, &nvp);
 	if (error != 0)
 		return (error);
 
@@ -1168,10 +1174,10 @@ tarfs_vget(struct mount *mp, struct vnode *dvp, ino_t ino, struct vnode **vpp)
 	int error;
 
 	TARFS_DPF(FS, "%s: mp %p, ino %lu, lkflags %d\n", __func__, mp, ino,
-	    lkflags);
+	    dvp->v_flag);
 
 	td = curthread;
-	error = vfs_hash_get(mp, ino, lkflags, td, vpp, NULL, NULL);
+	error = vfs_hash_get(mp, ino, dvp->v_flag, td, vpp, NULL, NULL);
 	if (error != 0)
 		return (error);
 
@@ -1185,7 +1191,7 @@ tarfs_vget(struct mount *mp, struct vnode *dvp, ino_t ino, struct vnode **vpp)
 	tmp = MP_TO_TARFS_MOUNT(mp);
 
 	if (ino == TARFS_ZIOINO) {
-		error = vget(tmp->znode, lkflags);
+		error = vget(tmp->znode, dvp->v_flag);
 		if (error != 0)
 			return (error);
 		*vpp = tmp->znode;
@@ -1207,12 +1213,12 @@ tarfs_vget(struct mount *mp, struct vnode *dvp, ino_t ino, struct vnode **vpp)
 	vp->v_type = tnp->type;
 	tnp->vnode = vp;
 
-	lockmgr(&vp->v_lock, lkflags);
+	lockmgr(&vp->v_lock, dvp->v_flag);
 	error = insmntque(vp, mp);
 	if (error != 0)
 		goto bad;
 	TARFS_DPF(FS, "%s: inserting entry into VFS hash\n", __func__);
-	error = vfs_hash_insert(vp, ino, lkflags, td, vpp, NULL, NULL);
+	error = vfs_hash_insert(vp, ino, dvp->v_flag, td, vpp, NULL, NULL);
 	if (error != 0 || *vpp != NULL)
 		return (error);
 
