@@ -1226,9 +1226,8 @@ tarfs_vget(struct mount *mp, struct vnode *dvp, ino_t ino, struct vnode **vpp)
 	tnp->vnode = vp;
 
 	lockmgr(&vp->v_lock, dvp->v_flag);
-	error = insmntque(vp, mp);
-	if (error != 0)
-		goto bad;
+	insmntque(vp, mp); /* Maybe look into a retval? That would seem nice */
+
 	TARFS_DPF(FS, "%s: inserting entry into VFS hash\n", __func__);
 	error = vfs_hash_insert(vp, ino, dvp->v_flag, td, vpp, NULL, NULL);
 	if (error != 0 || *vpp != NULL)
@@ -1236,10 +1235,6 @@ tarfs_vget(struct mount *mp, struct vnode *dvp, ino_t ino, struct vnode **vpp)
 
 	*vpp = vp;
 	return (0);
-
-bad:
-	*vpp = NULLVP;
-	return (error);
 }
 
 static int
