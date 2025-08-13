@@ -1022,7 +1022,6 @@ tarfs_mount(struct mount *mp, char *path, caddr_t data, struct ucred *cred)
 	if (error)
 		return (error);
 
-	vp = nd.ni_vp;
 	TARFS_DPF(FS, "%s: N: hold %u use %u lock 0x%x\n", __func__,
 	    vp->v_holdcnt, vp->v_usecount, VOP_ISLOCKED(vp));
 	/* vp is now held and locked */
