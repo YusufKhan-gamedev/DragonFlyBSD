@@ -26,12 +26,8 @@
  * SUCH DAMAGE.
  */
 
-#ifndef	_FS_TARFS_TARFS_H_
-#define	_FS_TARFS_TARFS_H_
-
-#ifndef _KERNEL
-#error Should only be included by kernel
-#endif
+#ifndef	_VFS_TARFS_TARFS_H_
+#define	_VFS_TARFS_TARFS_H_
 
 MALLOC_DECLARE(M_TARFSMNT);
 MALLOC_DECLARE(M_TARFSNODE);
@@ -267,4 +263,4 @@ ssize_t	tarfs_io_read_buf(struct tarfs_mount *tmp, bool raw,
 unsigned int
 	tarfs_strtofflags(const char *str, char **end);
 
-#endif	/* _FS_TARFS_TARFS_H_ */
+#endif	/* _VFS_TARFS_TARFS_H_ */

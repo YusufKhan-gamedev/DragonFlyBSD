@@ -28,9 +28,14 @@
  *
  */
 
+#ifndef _VFS_TARFS_IHASH_H_
+#define _VFS_TARFS_IHASH_H_
+
 struct vnode *tarfs_ihashget(dev_t, ino_t);
 int     tarfs_ihashins(struct tarfs_node *);
 void    tarfs_ihashrem(struct tarfs_node *);
 void    tarfs_ihashinit(void);
 void    tarfs_ihashuninit(void);
 int     tarfs_alloc_vnode(struct mount *, ino_t, struct vnode **);
+
+#endif /* _VFS_TARFS_IHASH_H_ */
