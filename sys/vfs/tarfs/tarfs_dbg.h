@@ -26,8 +26,8 @@
  * SUCH DAMAGE.
  */
 
-#ifndef	_FS_TARFS_TARFS_DBG_H_
-#define	_FS_TARFS_TARFS_DBG_H_
+#ifndef	_VFS_TARFS_TARFS_DBG_H_
+#define	_VFS_TARFS_TARFS_DBG_H_
 
 #ifndef _KERNEL
 #error Should only be included by kernel
@@ -63,4 +63,4 @@ extern int tarfs_debug;
 #define	TARFS_DPF_IFF(category, cond, fmt, ...)
 #endif
 
-#endif	/* _FS_TARFS_TARFS_DBG_H_ */
+#endif	/* _VFS_TARFS_TARFS_DBG_H_ */

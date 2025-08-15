@@ -29,6 +29,12 @@
 #ifndef	_VFS_TARFS_TARFS_H_
 #define	_VFS_TARFS_TARFS_H_
 
+#include <vfs/tarfs/tarfs_args.h>
+
+#ifndef _KERNEL
+#error Should only be included by kernel
+#endif
+
 MALLOC_DECLARE(M_TARFSMNT);
 MALLOC_DECLARE(M_TARFSNODE);
 MALLOC_DECLARE(M_TARFSNAME);
@@ -147,15 +153,6 @@ struct tarfs_mount {
 
 	struct tarfs_zio	*zio;
 	struct vnode		*znode;
-};
-
-struct tarfs_args {
-	char *from;
-	char *as;
-	uid_t root_uid;
-	gid_t root_gid;
-	mode_t root_mode;
-	int verify;
 };
 
 struct tarfs_zio {
