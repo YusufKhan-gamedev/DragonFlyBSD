@@ -56,6 +56,7 @@
 
 #include <vfs/tarfs/tarfs.h>
 #include <vfs/tarfs/tarfs_dbg.h>
+#include <vfs/tarfs/tarfs_ihash.h>
 
 CTASSERT(ZERO_REGION_SIZE >= TARFS_BLOCKSIZE);
 
@@ -1180,7 +1181,7 @@ tarfs_statfs(struct mount *mp, struct statfs *sbp, struct ucred *cred)
 static int
 tarfs_vget(struct mount *mp, struct vnode *dvp, ino_t ino, struct vnode **vpp)
 {
-	struct tarfs_mount *tmp;
+	struct tarfs_mount *tmp = MP_TO_TARFS_MOUNT(mp);
 	struct tarfs_node *tnp;
 	struct thread *td;
 	struct vnode *vp;
@@ -1190,9 +1191,8 @@ tarfs_vget(struct mount *mp, struct vnode *dvp, ino_t ino, struct vnode **vpp)
 	    dvp->v_flag);
 
 	td = curthread;
-	error = vfs_hash_get(mp, ino, dvp->v_flag, td, vpp, NULL, NULL);
-	if (error != 0)
-		return (error);
+	if ((*vpp = tarfs_ihashget(tmp->root->rdev, ino)) != NULL)
+		return (0);
 
 	if (*vpp != NULL) {
 		TARFS_DPF(FS, "%s: found hashed vnode %p\n", __func__, *vpp);
@@ -1230,9 +1230,17 @@ tarfs_vget(struct mount *mp, struct vnode *dvp, ino_t ino, struct vnode **vpp)
 	insmntque(vp, mp); /* Maybe look into a retval? That would seem nice */
 
 	TARFS_DPF(FS, "%s: inserting entry into VFS hash\n", __func__);
-	error = vfs_hash_insert(vp, ino, dvp->v_flag, td, vpp, NULL, NULL);
-	if (error != 0 || *vpp != NULL)
-		return (error);
+
+	if (tarfs_ihashins(tnp)) {
+		/* XXX: See if this is correct, its what ext2 does */
+		kprintf("Retrying tarfs_node, cant insert number %ld\n",
+			(long)tnp->ino);
+
+		*vpp = NULL;
+		vp->v_type = VBAD;
+		vx_put(vp);
+		return (-1);
+	}
 
 	*vpp = vp;
 	return (0);
@@ -1268,13 +1276,36 @@ tarfs_fhtovp(struct mount *mp, struct vnode *rootvp, struct fid *fhp, struct vno
 	return (0);
 }
 
+static int
+tarfs_init(struct vfsconf *conf)
+{
+	static bool done;
+	if (done)
+		return 0;
+	done = true;
+
+	tarfs_ihashinit();
+
+	return 0;
+}
+
+static int
+tarfs_uninit(struct vfsconf *conf)
+{
+	tarfs_ihashuninit();
+	return 0;
+}
+
 static struct vfsops tarfs_vfsops = {
+	.vfs_flags =	0,
 	.vfs_fhtovp =	tarfs_fhtovp,
 	.vfs_mount =	tarfs_mount,
 	.vfs_root =	tarfs_root,
 	.vfs_statfs =	tarfs_statfs,
 	.vfs_unmount =	tarfs_unmount,
 	.vfs_vget =	tarfs_vget,
+	.vfs_init =	tarfs_init,
+	.vfs_uninit = 	tarfs_uninit
 };
 VFS_SET(tarfs_vfsops, tarfs, VFCF_READONLY);
 MODULE_VERSION(tarfs, 1);

@@ -45,6 +45,7 @@
 
 #include <vfs/tarfs/tarfs.h>
 #include <vfs/tarfs/tarfs_dbg.h>
+#include <vfs/tarfs/tarfs_ihash.h>
 
 static int
 tarfs_open(struct vop_open_args *ap)
@@ -539,7 +540,7 @@ tarfs_reclaim(struct vop_reclaim_args *ap)
 	vp = ap->a_vp;
 	tnp = VP_TO_TARFS_NODE(vp);
 
-	vfs_hash_remove(vp);
+	tarfs_ihashrem(tnp);
 
 	TARFS_NODE_LOCK(tnp);
 	tnp->vnode = NULLVP;

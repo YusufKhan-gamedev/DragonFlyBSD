@@ -1,6 +1,7 @@
 KMOD=	tarfs
 SRCS=	opt_tarfs.h \
 	tarfs_io.c \
+	tarfs_ihash.c \
 	tarfs_subr.c \
 	tarfs_vnops.c \
 	tarfs_vfsops.c

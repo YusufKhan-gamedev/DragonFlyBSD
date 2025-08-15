@@ -61,6 +61,8 @@ struct tarfs_node {
 
 	struct lock		 lock;
 
+	struct tarfs_node	*i_next; /* Hash next */
+
 	struct vnode		*vnode;
 	struct tarfs_mount	*tmp;
 	enum vtype		 type;
@@ -76,6 +78,7 @@ struct tarfs_node {
 	gid_t			 gid;
 	mode_t			 mode;
 	unsigned int		 flags;
+        unsigned int             i_flag;
 	nlink_t			 nlink;
 	struct timespec		 atime;
 	struct timespec		 mtime;
