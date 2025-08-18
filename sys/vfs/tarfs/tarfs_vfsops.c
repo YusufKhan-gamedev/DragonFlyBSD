@@ -953,6 +953,9 @@ tarfs_mount(struct mount *mp, char *path, caddr_t data, struct ucred *cred)
 	if (mp->mnt_flag & MNT_UPDATE)
 		return (EOPNOTSUPP);
 
+	if (!path)
+		return (EINVAL);
+
 #if 0
 	if (mp->mnt_cred->cr_ruid != 0 ||
 	    vfs_scanopt(mp->mnt_optnew, "gid", "%d", &root_gid) != 1)
@@ -963,9 +966,6 @@ tarfs_mount(struct mount *mp, char *path, caddr_t data, struct ucred *cred)
 	if (mp->mnt_cred->cr_ruid != 0 ||
 	    vfs_scanopt(mp->mnt_optnew, "mode", "%ho", &root_mode) != 1)
 		root_mode = va.va_mode;
-
-	if (!path)
-		return (EINVAL);
 
 	error = vfs_getopt(mp->mnt_optnew, "from", (void **)&from, &len);
 	if (error != 0 || from[len - 1] != '\0')
@@ -1028,8 +1028,15 @@ tarfs_mount(struct mount *mp, char *path, caddr_t data, struct ucred *cred)
 	    vp->v_holdcnt, vp->v_usecount, VOP_ISLOCKED(vp));
 	/* vp is now held and locked */
 
+	error = nlookup_init(&nd, args.from, UIO_USERSPACE, NLC_FOLLOW);
+	if (error)
+		return error;
+
 	/* Open the source tarball */
 	error = vn_open(&nd, NULL, flags, 0);
+
+	nlookup_done(&nd); /* We need this checked no matter what */
+
 	if (error != 0) {
 		TARFS_DPF(FS, "%s: failed to open %s: %d\n", __func__,
 		    from, error);
