@@ -883,7 +883,7 @@ tarfs_alloc_mount(struct mount *mp, struct vnode *vp,
 	if (error != 0) {
 		return (error);
 	}
-	vn_unlock(vp);
+
 	mtime = va.va_mtime.tv_sec;
 
 	mp->mnt_iosize_max = vp->v_mount->mnt_iosize_max;
