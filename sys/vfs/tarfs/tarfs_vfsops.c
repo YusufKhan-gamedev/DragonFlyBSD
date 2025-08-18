@@ -1090,7 +1090,6 @@ bad_open_locked:
 	/* vp must be held and locked */
 	TARFS_DPF(FS, "%s: L: hold %u use %u lock 0x%x\n", __func__,
 	    vp->v_holdcnt, vp->v_usecount, VOP_ISLOCKED(vp));
-	vn_unlock(vp);
 bad_open_unlocked:
 	/* vp must be held and unlocked */
 	TARFS_DPF(FS, "%s: E: hold %u use %u lock 0x%x\n", __func__,
