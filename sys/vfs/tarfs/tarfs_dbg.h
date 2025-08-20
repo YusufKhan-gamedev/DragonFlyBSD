@@ -33,7 +33,7 @@
 #error Should only be included by kernel
 #endif
 
-#ifdef	TARFS_DEBUG
+#if defined(TARFS_DEBUG) || true
 extern int tarfs_debug;
 
 #define	TARFS_DEBUG_ALLOC	0x01

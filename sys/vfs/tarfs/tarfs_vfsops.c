@@ -1016,6 +1016,12 @@ tarfs_mount(struct mount *mp, char *path, caddr_t data, struct ucred *cred)
         if (error)
                 return (error);
 
+        if (vp->v_type != VREG) {
+                TARFS_DPF(FS, "%s: not a regular file\n", __func__);
+                error = EOPNOTSUPP;
+                goto bad_open_locked;
+        }
+
         root_uid  = (args.root_uid  != (uid_t)-1) ? args.root_uid  : va.va_uid;
         root_gid  = (args.root_gid  != (gid_t)-1) ? args.root_gid  : va.va_gid;
         root_mode = (args.root_mode != (mode_t)-1)? args.root_mode : va.va_mode;
@@ -1174,6 +1180,7 @@ tarfs_statfs(struct mount *mp, struct statfs *sbp, struct ucred *cred)
 
 	tmp = MP_TO_TARFS_MOUNT(mp);
 
+	sbp->f_type = mp->mnt_vfc->vfc_typenum;
 	sbp->f_bsize = TARFS_BLOCKSIZE;
 	sbp->f_iosize = tmp->iosize;
 	sbp->f_blocks = tmp->nblocks;
@@ -1289,6 +1296,24 @@ tarfs_fhtovp(struct mount *mp, struct vnode *rootvp, struct fid *fhp, struct vno
 }
 
 static int
+tarfs_vptofh(struct vnode *vp, struct fid *fhp)
+{
+	struct tarfs_fid *tfp;
+	struct tarfs_node *tnp;
+	_Static_assert(sizeof(struct tarfs_fid) <= sizeof(struct fid),
+		"struct tarfs_fid cannot be larger than struct fid");
+
+	tfp = (struct tarfs_fid *)fhp;
+	tnp = VP_TO_TARFS_NODE(vp);
+
+	tfp->len = sizeof(struct tarfs_fid);
+	tfp->ino = tnp->ino;
+	tfp->gen = tnp->gen;
+
+	return (0);
+}
+
+static int
 tarfs_init(struct vfsconf *conf)
 {
 	static bool done;
@@ -1311,6 +1336,7 @@ tarfs_uninit(struct vfsconf *conf)
 static struct vfsops tarfs_vfsops = {
 	.vfs_flags =	0,
 	.vfs_fhtovp =	tarfs_fhtovp,
+	.vfs_vptofh = 	tarfs_vptofh,
 	.vfs_mount =	tarfs_mount,
 	.vfs_root =	tarfs_root,
 	.vfs_statfs =	tarfs_statfs,
