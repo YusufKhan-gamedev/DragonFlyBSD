@@ -883,6 +883,7 @@ tarfs_alloc_mount(struct mount *mp, struct vnode *vp,
 	if (error != 0) {
 		return (error);
 	}
+	vn_unlock(vp);
 
 	mtime = va.va_mtime.tv_sec;
 
@@ -1023,17 +1024,20 @@ tarfs_mount(struct mount *mp, char *path, caddr_t data, struct ucred *cred)
         TARFS_DPF(FS, "%s(%s%s%s, uid=%u, gid=%u, mode=%o)\n", __func__,
             from, (as != from) ? " as " : "", (as != from) ? as : "",
             root_uid, root_gid, root_mode);
-
+#if 0
 	TARFS_DPF(FS, "%s: N: hold %u use %u lock 0x%x\n", __func__,
-	    vp->v_holdcnt, vp->v_usecount, VOP_ISLOCKED(vp));
+	    0, 0, 0);
 	/* vp is now held and locked */
-
-	error = nlookup_init(&nd, args.from, UIO_USERSPACE, NLC_FOLLOW);
+#endif
+	error = nlookup_init(&nd, args.from, UIO_USERSPACE, NLC_FOLLOW|NLC_LOCKVP);
 	if (error)
 		return error;
 
 	/* Open the source tarball */
 	error = vn_open(&nd, NULL, flags, 0);
+
+	vp = nd.nl_open_vp;
+	nd.nl_open_vp = NULL;
 
 	nlookup_done(&nd); /* We need this checked no matter what */
 
@@ -1044,7 +1048,7 @@ tarfs_mount(struct mount *mp, char *path, caddr_t data, struct ucred *cred)
 		goto bad;
 	}
 	TARFS_DPF(FS, "%s: O: hold %u use %u lock 0x%x\n", __func__,
-	    vp->v_holdcnt, vp->v_usecount, VOP_ISLOCKED(vp));
+	    0, 0, 0);
 	if (vp->v_type != VREG) {
 		TARFS_DPF(FS, "%s: not a regular file\n", __func__);
 		error = EOPNOTSUPP;
@@ -1066,7 +1070,7 @@ tarfs_mount(struct mount *mp, char *path, caddr_t data, struct ucred *cred)
 		goto bad_open_unlocked;
 	}
 	TARFS_DPF(FS, "%s: M: hold %u use %u lock 0x%x\n", __func__,
-	    vp->v_holdcnt, vp->v_usecount, VOP_ISLOCKED(vp));
+	    0, 0, 0);
 
 #if 0 /* XXX */
 	mp->mnt_maxsymlinklen = EXT2_MAXSYMLINKLEN;
@@ -1087,18 +1091,20 @@ tarfs_mount(struct mount *mp, char *path, caddr_t data, struct ucred *cred)
 	return (0);
 
 bad_open_locked:
+	kprintf("NOT A REGULAR FILE");
+	vn_unlock(vp);
 	/* vp must be held and locked */
 	TARFS_DPF(FS, "%s: L: hold %u use %u lock 0x%x\n", __func__,
-	    vp->v_holdcnt, vp->v_usecount, VOP_ISLOCKED(vp));
+	    0, 0, 0);
 bad_open_unlocked:
 	/* vp must be held and unlocked */
 	TARFS_DPF(FS, "%s: E: hold %u use %u lock 0x%x\n", __func__,
-	    vp->v_holdcnt, vp->v_usecount, VOP_ISLOCKED(vp));
+	    0, 0, 0);
 	(void)vn_close(vp, flags, NULL);
 bad:
 	/* vp must be released and unlocked */
 	TARFS_DPF(FS, "%s: X: hold %u use %u lock 0x%x\n", __func__,
-	    vp->v_holdcnt, vp->v_usecount, VOP_ISLOCKED(vp));
+	    0, 0, 0);
 	return (error);
 }
 
@@ -1128,10 +1134,10 @@ tarfs_unmount(struct mount *mp, int mntflags)
 
 	KKASSERT(vp != NULL);
 	TARFS_DPF(FS, "%s: U: hold %u use %u lock 0x%x\n", __func__,
-	    vp->v_holdcnt, vp->v_usecount, VOP_ISLOCKED(vp));
+	    0, 0, 0);
 	vn_close(vp, FREAD, NULL);
 	TARFS_DPF(FS, "%s: C: hold %u use %u lock 0x%x\n", __func__,
-	    vp->v_holdcnt, vp->v_usecount, VOP_ISLOCKED(vp));
+	    0, 0, 0);
 	tarfs_free_mount(tmp);
 
 	return (0);
@@ -1232,7 +1238,7 @@ tarfs_vget(struct mount *mp, struct vnode *dvp, ino_t ino, struct vnode **vpp)
 	vp->v_type = tnp->type;
 	tnp->vnode = vp;
 
-	lockmgr(&vp->v_lock, dvp->v_flag);
+	// lockmgr(&vp->v_vnlock, lkflags); /* BWEH!!!??! */
 	insmntque(vp, mp); /* Maybe look into a retval? That would seem nice */
 
 	TARFS_DPF(FS, "%s: inserting entry into VFS hash\n", __func__);

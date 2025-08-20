@@ -13,6 +13,8 @@ CFLAGS+=	-DTARFS_DEBUG
 .endif
 .endif
 
+CFLAGS+=        -DTARFS_DEBUG
+
 SRCS+=	opt_zstdio.h
 CFLAGS+=	-I${SRCTOP}/sys/contrib/zstd/lib/freebsd
 

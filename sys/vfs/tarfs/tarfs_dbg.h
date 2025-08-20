@@ -50,13 +50,13 @@ extern int tarfs_debug;
 #define	TARFS_DPF(category, fmt, ...)					\
 	do {								\
 		if ((tarfs_debug & TARFS_DEBUG_##category) != 0)	\
-			printf(fmt, ## __VA_ARGS__);			\
+			kprintf(fmt, ## __VA_ARGS__);			\
 	} while (0)
 #define	TARFS_DPF_IFF(category, cond, fmt, ...)				\
 	do {								\
 		if ((cond)						\
 		    && (tarfs_debug & TARFS_DEBUG_##category) != 0)	\
-			printf(fmt, ## __VA_ARGS__);			\
+			kprintf(fmt, ## __VA_ARGS__);			\
 	} while (0)
 #else
 #define	TARFS_DPF(category, fmt, ...)

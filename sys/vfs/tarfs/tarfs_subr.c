@@ -86,7 +86,7 @@ SYSCTL_PROC(_vfs_tarfs, OID_AUTO, ioshift,
 
 #ifdef TARFS_DEBUG
 int tarfs_debug;
-SYSCTL_INT(_vfs_tarfs, OID_AUTO, debug, CTLFLAG_RWTUN,
+SYSCTL_INT(_vfs_tarfs, OID_AUTO, debug, CTLFLAG_RW,
     &tarfs_debug, 0, "Tar filesystem debug mask");
 #endif	/* TARFS_DEBUG */
 
@@ -115,8 +115,10 @@ tarfs_lookup_node(struct tarfs_node *tnp, struct tarfs_node *f,
 
 	if (found) {
 		if (entry->type == VREG && entry->other != NULL) {
+#if 0
 			TARFS_DPF_IFF(LOOKUP, "%s: following hard link %p\n",
 			    __func__, entry);
+#endif
 			entry = entry->other;
 		}
 		TARFS_DPF(LOOKUP, "%s: found tarfs_node %p\n", __func__,
@@ -203,6 +205,7 @@ tarfs_alloc_node(struct tarfs_mount *tmp, const char *name, size_t namelen,
 		KKASSERT(parent != tnp);
 		KKASSERT(parent != NULL || tmp->root == NULL);
 		TAILQ_INIT(&tnp->dir.dirhead);
+
 		tnp->nlink++;
 		if (parent == NULL) {
 			tnp->ino = TARFS_ROOTINO;

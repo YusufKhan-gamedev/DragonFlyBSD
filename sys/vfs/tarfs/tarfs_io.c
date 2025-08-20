@@ -54,6 +54,7 @@
 #include <vfs/tarfs/tarfs_dbg.h>
 
 #ifdef TARFS_DEBUG
+#ifdef TARFS_ZIO
 SYSCTL_NODE(_vfs_tarfs, OID_AUTO, zio, CTLFLAG_RD, 0,
     "Tar filesystem decompression layer");
 COUNTER_U64_DEFINE_EARLY(tarfs_zio_inflated);
@@ -89,6 +90,7 @@ SYSCTL_PROC(_vfs_tarfs_zio, OID_AUTO, reset,
     CTLTYPE_INT | CTLFLAG_MPSAFE | CTLFLAG_RW,
     NULL, 0, tarfs_sysctl_handle_zio_reset, "IU",
     "Reset compression counters.");
+#endif
 #endif
 
 MALLOC_DEFINE(M_TARFSZSTATE, "tarfs zstate", "tarfs decompression state");
@@ -139,8 +141,10 @@ tarfs_io_read(struct tarfs_mount *tmp, bool raw, struct uio *uiop)
 			vn_unlock(tmp->znode);
 		}
 	}
+#ifdef TARFS_ZIO
 	TARFS_DPF(IO, "%s(%zu, %zu) = %d (resid %zd)\n", __func__,
 	    (size_t)off, len, error, uiop->uio_resid);
+#endif
 	return (error);
 }
 
@@ -184,9 +188,11 @@ tarfs_io_read_buf(struct tarfs_mount *tmp, bool raw,
 		TARFS_DPF(IO, "%s(%zu, %zu) eof\n", __func__,
 		    (size_t)off, len);
 	} else {
+#ifdef TARFS_ZIO
 		TARFS_DPF(IO, "%s(%zu, %zu) read %zd | %*D\n", __func__,
 		    (size_t)off, len, res,
 		    (int)(res > 8 ? 8 : res), (uint8_t *)buf, " ");
+#endif
 	}
 	return (res);
 }

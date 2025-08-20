@@ -242,7 +242,33 @@ tarfs_lookup(struct vop_old_lookup_args *ap)
 	if (error != 0)
 		return (error);
 
-	if (cnp->cn_namelen == 1 && cnp->cn_nameptr[0] == '.') {
+	if (cnp->cn_flags & CNP_ISDOTDOT) {
+		/* Do not allow .. on the root node */
+		if (parent == NULL || parent == dirnode)
+			return (ENOENT);
+
+		vn_unlock(dvp);
+#if 0
+		/* Allocate a new vnode on the matching entry */
+		error = vn_vget_ino(dvp, parent->ino, cnp->cn_flags,
+		    vpp);
+#endif
+		error = VFS_VGET(dvp->v_mount, NULL, parent->ino, &vp);
+		if (error != 0) {
+			vn_lock(dvp, LK_EXCLUSIVE | LK_FAILRECLAIM);
+			return (error);
+		}
+
+		if (cnp->cn_flags & CNP_LOCKPARENT) {
+			error = vn_lock(dvp, LK_EXCLUSIVE | LK_FAILRECLAIM);
+			if (error) {
+				vput(dvp);
+				return (error);
+			}
+		}
+
+
+	} else if (cnp->cn_namelen == 1 && cnp->cn_nameptr[0] == '.') {
 		vref(dvp);
 		*vpp = dvp;
 #ifdef TARFS_DEBUG
@@ -250,7 +276,7 @@ tarfs_lookup(struct vop_old_lookup_args *ap)
 	    (vp = dirnode->tmp->znode) != NULL &&
 	    cnp->cn_namelen == TARFS_ZIO_NAMELEN &&
 	    memcmp(cnp->cn_nameptr, TARFS_ZIO_NAME, TARFS_ZIO_NAMELEN) == 0) {
-		error = vn_lock(vp, cnp->cn_lkflags);
+		error = vn_lock(vp, cnp->cn_flags);
 		if (error != 0)
 			return (error);
 		vref(vp);
@@ -587,11 +613,11 @@ tarfs_strategy(struct vop_strategy_args *ap)
 	tnp = VP_TO_TARFS_NODE(ap->a_vp);
 	bp = ap->a_bio->bio_buf;
 	KKASSERT(bp->b_iocmd == BIO_READ);
-	KKASSERT(bp->b_iooffset >= 0);
+	KKASSERT(ap->a_bio->bio_offset >= 0);
 	KKASSERT(bp->b_bcount > 0);
 	KKASSERT(bp->b_bufsize >= bp->b_bcount);
-	TARFS_DPF(VNODE, "%s(%p=%s, %zu, %ld/%ld)\n", __func__, tnp,
-	    tnp->name, (size_t)bp->b_iooffset, bp->b_bcount, bp->b_bufsize);
+	TARFS_DPF(VNODE, "%s(%p=%s, %zu, %d/%d)\n", __func__, tnp,
+	    tnp->name, (size_t)ap->a_bio->bio_offset, bp->b_bcount, bp->b_bufsize);
 	iov.iov_base = bp->b_data;
 	iov.iov_len = bp->b_bcount;
 	off = ap->a_bio->bio_offset;

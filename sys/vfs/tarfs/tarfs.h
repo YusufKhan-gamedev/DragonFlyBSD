@@ -31,6 +31,8 @@
 
 #include <vfs/tarfs/tarfs_args.h>
 
+#define TARFS_DEBUG
+
 #ifndef _KERNEL
 #error Should only be included by kernel
 #endif
