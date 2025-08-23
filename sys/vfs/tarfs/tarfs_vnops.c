@@ -358,6 +358,9 @@ tarfs_readdir(struct vop_readdir_args *ap)
 		cde.d_namlen = 1;
 		cde.d_name[0] = '.';
 		cde.d_name[1] = '\0';
+		if (vop_write_dirent(&error, uio, cde.d_ino, cde.d_type,
+				     cde.d_namlen, cde.d_name))
+			goto full;
 
 		/* next is .. */
 		uio->uio_offset = TARFS_COOKIE_DOTDOT;
@@ -376,6 +379,9 @@ tarfs_readdir(struct vop_readdir_args *ap)
 		cde.d_name[0] = '.';
 		cde.d_name[1] = '.';
 		cde.d_name[2] = '\0';
+		if (vop_write_dirent(&error, uio, cde.d_ino, cde.d_type,
+				     cde.d_namlen, cde.d_name))
+			goto full;
 
 		/* next is first child */
 		current = TAILQ_FIRST(&tnp->dir.dirhead);
@@ -431,6 +437,9 @@ tarfs_readdir(struct vop_readdir_args *ap)
 		KKASSERT(tnp->namelen < sizeof(cde.d_name));
 		(void)memcpy(cde.d_name, current->name, current->namelen);
 		cde.d_name[current->namelen] = '\0';
+		if (vop_write_dirent(&error, uio, cde.d_ino, cde.d_type,
+					cde.d_namlen, cde.d_name))
+			goto full;
 		ndirents++;
                 kprintf("d\n");
 		/* next sibling */
@@ -442,6 +451,11 @@ tarfs_readdir(struct vop_readdir_args *ap)
 		kprintf("%s: [%u] setting current node to %p=%s\n",
 		    __func__, ndirents, current, current->name);
 	}
+full:
+	/* We kinda have to yolo it here, vop_write_dirent has to return true! */
+	TARFS_DPF(VNODE, "%s: out of space, returning\n",
+		__func__);
+	error = (ndirents == 0) ? EINVAL : 0;
 done:
 	kprintf("%s: %u entries written\n", __func__, ndirents);
 	kprintf("%s: saving cache information\n", __func__);
