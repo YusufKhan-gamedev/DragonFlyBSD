@@ -214,11 +214,11 @@ tarfs_checksum(struct ustar_header *hdrp)
 	int64_t checksum, hdrsum;
 
 	if (tarfs_str2int64(hdrp->checksum, sizeof(hdrp->checksum), &hdrsum) != 0) {
-		TARFS_DPF(CHECKSUM, "%s: invalid header checksum \"%.*s\"\n",
+		kprintf("%s: invalid header checksum \"%.*s\"\n",
 		    __func__, (int)sizeof(hdrp->checksum), hdrp->checksum);
 		return (false);
 	}
-	TARFS_DPF(CHECKSUM, "%s: header checksum \"%.*s\" = %#lo\n", __func__,
+	kprintf("%s: header checksum \"%.*s\" = %#lo\n", __func__,
 	    (int)sizeof(hdrp->checksum), hdrp->checksum, hdrsum);
 
 	checksum = 0;
@@ -231,7 +231,7 @@ tarfs_checksum(struct ustar_header *hdrp)
 	for (;
 	     ptr < (const unsigned char *)(hdrp + 1); ptr++)
 		checksum += *ptr;
-	TARFS_DPF(CHECKSUM, "%s: calc unsigned checksum %#lo\n", __func__,
+	kprintf("%s: calc unsigned checksum %#lo\n", __func__,
 	    checksum);
 	if (hdrsum == checksum)
 		return (true);
@@ -250,7 +250,7 @@ tarfs_checksum(struct ustar_header *hdrp)
 	for (;
 	     ptr < (const unsigned char *)(hdrp + 1); ptr++)
 		checksum += *((const signed char *)ptr);
-	TARFS_DPF(CHECKSUM, "%s: calc signed checksum %#lo\n", __func__,
+	kprintf("%s: calc signed checksum %#lo\n", __func__,
 	    checksum);
 	if (hdrsum == checksum)
 		return (true);
@@ -297,7 +297,7 @@ tarfs_lookup_path(struct tarfs_mount *tmp, char *name, size_t namelen,
 	if (tnp == NULL)
 		panic("%s: root node not yet created", __func__);
 
-	TARFS_DPF(LOOKUP, "%s: full path: %.*s\n", __func__,
+	kprintf("%s: full path: %.*s\n", __func__,
 	    (int)namelen, name);
 
 	sep = NULL;
@@ -315,7 +315,7 @@ tarfs_lookup_path(struct tarfs_mount *tmp, char *name, size_t namelen,
 
 		/* we're not at the end, so we must be in a directory */
 		if (tnp != NULL && tnp->type != VDIR) {
-			TARFS_DPF(LOOKUP, "%s: %.*s is not a directory\n", __func__,
+			kprintf("%s: %.*s is not a directory\n", __func__,
 			    (int)tnp->namelen, tnp->name);
 			error = ENOTDIR;
 			break;
@@ -343,7 +343,7 @@ tarfs_lookup_path(struct tarfs_mount *tmp, char *name, size_t namelen,
 			cn.cn_nameptr = tnp->name;
 			cn.cn_namelen = tnp->namelen;
 			do_lookup = true;
-			TARFS_DPF(LOOKUP, "%s: back to %.*s/\n", __func__,
+			kprintf("%s: back to %.*s/\n", __func__,
 			    (int)tnp->namelen, tnp->name);
 			name += len;
 			namelen -= len;
@@ -352,7 +352,7 @@ tarfs_lookup_path(struct tarfs_mount *tmp, char *name, size_t namelen,
 
 		/* create parent if necessary */
 		if (!do_lookup) {
-			TARFS_DPF(ALLOC, "%s: creating %.*s\n", __func__,
+			kprintf("%s: creating %.*s\n", __func__,
 			    (int)cn.cn_namelen, cn.cn_nameptr);
 			error = tarfs_alloc_node(tmp, cn.cn_nameptr,
 			    cn.cn_namelen, VDIR, -1, 0, tmp->mtime, 0, 0,
@@ -365,7 +365,7 @@ tarfs_lookup_path(struct tarfs_mount *tmp, char *name, size_t namelen,
 		tnp = NULL;
 		cn.cn_nameptr = name;
 		cn.cn_namelen = len;
-		TARFS_DPF(LOOKUP, "%s: looking up %.*s in %.*s/\n", __func__,
+		kprintf("%s: looking up %.*s in %.*s/\n", __func__,
 		    (int)cn.cn_namelen, cn.cn_nameptr,
 		    (int)parent->namelen, parent->name);
 		if (do_lookup) {
@@ -378,11 +378,12 @@ tarfs_lookup_path(struct tarfs_mount *tmp, char *name, size_t namelen,
 				}
 			}
 		}
+
 		name += cn.cn_namelen;
 		namelen -= cn.cn_namelen;
 	}
 
-	TARFS_DPF(LOOKUP, "%s: parent %p node %p\n", __func__, parent, tnp);
+	kprintf("%s: parent %p node %p\n", __func__, parent, tnp);
 
 	if (retparent)
 		*retparent = parent;
@@ -410,21 +411,21 @@ tarfs_free_mount(struct tarfs_mount *tmp)
 
 	KKASSERT(tmp != NULL);
 
-	TARFS_DPF(ALLOC, "%s: Freeing mount structure %p\n", __func__, tmp);
+	kprintf("%s: Freeing mount structure %p\n", __func__, tmp);
 
-	TARFS_DPF(ALLOC, "%s: freeing tarfs_node structures\n", __func__);
+	kprintf("%s: freeing tarfs_node structures\n", __func__);
 	TAILQ_FOREACH_MUTABLE(tnp, &tmp->allnodes, entries, tnp_next) {
 		tarfs_free_node(tnp);
 	}
 
 	(void)tarfs_io_fini(tmp);
 
-	TARFS_DPF(ALLOC, "%s: deleting unr header\n", __func__);
+	kprintf("%s: deleting unr header\n", __func__);
 	delete_unrhdr(tmp->ino_unr);
 	mp = tmp->vfs;
 	mp->mnt_data = NULL;
 
-	TARFS_DPF(ALLOC, "%s: freeing structure\n", __func__);
+	kprintf("%s: freeing structure\n", __func__);
 	kfree(tmp, M_TARFSMNT);
 }
 
@@ -475,11 +476,11 @@ again:
 	if (memcmp(block, zero_region, TARFS_BLOCKSIZE) == 0) {
 		if (endmarker++) {
 			if (exthdr != NULL) {
-				TARFS_DPF(IO, "%s: orphaned extended header at %zu\n",
+				kprintf("%s: orphaned extended header at %zu\n",
 				    __func__, TARFS_BLOCKSIZE * (blknum - 1));
 				kfree(exthdr, M_TEMP);
 			}
-			TARFS_DPF(IO, "%s: end of archive at %zu\n", __func__,
+			kprintf("%s: end of archive at %zu\n", __func__,
 			    TARFS_BLOCKSIZE * blknum);
 			tmp->nblocks = blknum;
 			*blknump = TAR_EOF;
@@ -494,12 +495,12 @@ again:
 		/* POSIX */
 	} else if (memcmp(hdrp->magic, GNUTAR_MAGIC, sizeof(GNUTAR_MAGIC)) == 0 &&
 	    memcmp(hdrp->magic, GNUTAR_MAGIC, sizeof(GNUTAR_MAGIC)) == 0) {
-		TARFS_DPF(ALLOC, "%s: GNU tar format at %zu\n", __func__,
+		kprintf("%s: GNU tar format at %zu\n", __func__,
 		    TARFS_BLOCKSIZE * (blknum - 1));
 		error = EFTYPE;
 		goto bad;
 	} else {
-		TARFS_DPF(ALLOC, "%s: unsupported TAR format at %zu\n",
+		kprintf("%s: unsupported TAR format at %zu\n",
 		    __func__, TARFS_BLOCKSIZE * (blknum - 1));
 		error = EINVAL;
 		goto bad;
@@ -507,7 +508,7 @@ again:
 
 	/* verify checksum */
 	if (!tarfs_checksum(hdrp)) {
-		TARFS_DPF(ALLOC, "%s: header checksum failed at %zu\n",
+		kprintf("%s: header checksum failed at %zu\n",
 		    __func__, TARFS_BLOCKSIZE * (blknum - 1));
 		error = EINVAL;
 		goto bad;
@@ -516,7 +517,7 @@ again:
 	/* get standard attributes */
 	if (tarfs_str2int64(hdrp->mode, sizeof(hdrp->mode), &num) != 0 ||
 	    num < 0 || num > (S_IFMT|ALLPERMS)) {
-		TARFS_DPF(ALLOC, "%s: invalid file mode at %zu\n",
+		kprintf("%s: invalid file mode at %zu\n",
 		    __func__, TARFS_BLOCKSIZE * (blknum - 1));
 		mode = S_IRUSR;
 	} else {
@@ -524,7 +525,7 @@ again:
 	}
 	if (tarfs_str2int64(hdrp->uid, sizeof(hdrp->uid), &num) != 0 ||
 	    num < 0 || num > UID_MAX) {
-		TARFS_DPF(ALLOC, "%s: invalid UID at %zu\n",
+		kprintf("%s: invalid UID at %zu\n",
 		    __func__, TARFS_BLOCKSIZE * (blknum - 1));
 		uid = tmp->root->uid;
 		mode &= ~S_ISUID;
@@ -533,7 +534,7 @@ again:
 	}
 	if (tarfs_str2int64(hdrp->gid, sizeof(hdrp->gid), &num) != 0 ||
 	    num < 0 || num > GID_MAX) {
-		TARFS_DPF(ALLOC, "%s: invalid GID at %zu\n",
+		kprintf("%s: invalid GID at %zu\n",
 		    __func__, TARFS_BLOCKSIZE * (blknum - 1));
 		gid = tmp->root->gid;
 		mode &= ~S_ISGID;
@@ -542,26 +543,26 @@ again:
 	}
 	if (tarfs_str2int64(hdrp->size, sizeof(hdrp->size), &num) != 0 ||
 	    num < 0) {
-		TARFS_DPF(ALLOC, "%s: invalid size at %zu\n",
+		kprintf("%s: invalid size at %zu\n",
 		    __func__, TARFS_BLOCKSIZE * (blknum - 1));
 		error = EINVAL;
 		goto bad;
 	}
 	sz = num;
 	if (tarfs_str2int64(hdrp->mtime, sizeof(hdrp->mtime), &num) != 0) {
-		TARFS_DPF(ALLOC, "%s: invalid modification time at %zu\n",
+		kprintf("%s: invalid modification time at %zu\n",
 		    __func__, TARFS_BLOCKSIZE * (blknum - 1));
 		error = EINVAL;
 		goto bad;
 	}
 	mtime = num;
 	rdev = NOUDEV;
-	TARFS_DPF(ALLOC, "%s: [%c] %zu @%jd %o %d:%d\n", __func__,
+	kprintf("%s: [%c] %zu @%jd %o %d:%d\n", __func__,
 	    hdrp->typeflag[0], sz, (intmax_t)mtime, mode, uid, gid);
 
 	/* global extended header? */
 	if (hdrp->typeflag[0] == TAR_TYPE_GLOBAL_EXTHDR) {
-		TARFS_DPF(ALLOC, "%s: %zu-byte global extended header at %zu\n",
+		kprintf("%s: %zu-byte global extended header at %zu\n",
 		    __func__, sz, TARFS_BLOCKSIZE * (blknum - 1));
 		goto skip;
 	}
@@ -569,13 +570,13 @@ again:
 	/* extended header? */
 	if (hdrp->typeflag[0] == TAR_TYPE_EXTHDR) {
 		if (exthdr != NULL) {
-			TARFS_DPF(IO, "%s: multiple extended headers at %zu\n",
+			kprintf("%s: multiple extended headers at %zu\n",
 			    __func__, TARFS_BLOCKSIZE * (blknum - 1));
 			error = EFTYPE;
 			goto bad;
 		}
 		/* read the contents of the exthdr */
-		TARFS_DPF(ALLOC, "%s: %zu-byte extended header at %zu\n",
+		kprintf("%s: %zu-byte extended header at %zu\n",
 		    __func__, sz, TARFS_BLOCKSIZE * (blknum - 1));
 		exthdr = kmalloc(sz, M_TEMP, M_WAITOK);
 		res = tarfs_io_read_buf(tmp, false, exthdr,
@@ -594,14 +595,14 @@ again:
 			char *eol, *key, *value, *sep;
 			size_t len = strtoul(line, &sep, 10);
 			if (len == 0 || sep == line || *sep != ' ') {
-				TARFS_DPF(ALLOC, "%s: exthdr syntax error\n",
+				kprintf("%s: exthdr syntax error\n",
 				    __func__);
 				error = EINVAL;
 				goto bad;
 			}
 			if ((uintptr_t)line + len < (uintptr_t)line ||
 			    line + len > exthdr + sz) {
-				TARFS_DPF(ALLOC, "%s: exthdr overflow\n",
+				kprintf("%s: exthdr overflow\n",
 				    __func__);
 				error = EINVAL;
 				goto bad;
@@ -612,14 +613,14 @@ again:
 			key = sep + 1;
 			sep = strchr(key, '=');
 			if (sep == NULL) {
-				TARFS_DPF(ALLOC, "%s: exthdr syntax error\n",
+				kprintf("%s: exthdr syntax error\n",
 				    __func__);
 				error = EINVAL;
 				goto bad;
 			}
 			*sep = '\0';
 			value = sep + 1;
-			TARFS_DPF(ALLOC, "%s: exthdr %s=%s\n", __func__,
+			kprintf("%s: exthdr %s=%s\n", __func__,
 			    key, value);
 			if (strcmp(key, "path") == 0) {
 				name = value;
@@ -674,11 +675,11 @@ again:
 
 	/* sparse file consistency checks */
 	if (sparse) {
-		TARFS_DPF(ALLOC, "%s: %s: sparse %ld.%ld (%zu bytes)\n", __func__,
+		kprintf("%s: %s: sparse %ld.%ld (%zu bytes)\n", __func__,
 		    name, major, minor, realsize);
 		if (major != 1 || minor != 0 || name == NULL || realsize == 0 ||
 		    hdrp->typeflag[0] != TAR_TYPE_FILE) {
-			TARFS_DPF(ALLOC, "%s: invalid sparse format\n", __func__);
+			kprintf("%s: invalid sparse format\n", __func__);
 			error = EINVAL;
 			goto bad;
 		}
@@ -703,7 +704,7 @@ again:
 	error = tarfs_lookup_path(tmp, name, namelen, &namep,
 	    &sep, &parent, &tnp, true);
 	if (error != 0) {
-		TARFS_DPF(ALLOC, "%s: failed to look up %.*s\n", __func__,
+		kprintf("%s: failed to look up %.*s\n", __func__,
 		    (int)namelen, name);
 		error = EINVAL;
 		goto bad;
@@ -713,7 +714,7 @@ again:
 			/* XXX set attributes? */
 			goto skip;
 		}
-		TARFS_DPF(ALLOC, "%s: duplicate file %.*s\n", __func__,
+		kprintf("%s: duplicate file %.*s\n", __func__,
 		    (int)namelen, name);
 		error = EINVAL;
 		goto bad;
@@ -738,7 +739,7 @@ again:
 			linklen = strnlen(link, sizeof(hdrp->linkname));
 		}
 		if (linklen == 0) {
-			TARFS_DPF(ALLOC, "%s: %.*s: link without target\n",
+			kprintf("%s: %.*s: link without target\n",
 			    __func__, (int)namelen, name);
 			error = EINVAL;
 			goto bad;
@@ -747,7 +748,7 @@ again:
 		    NULL, NULL, &other, false);
 		if (error != 0 || other == NULL ||
 		    other->type != VREG || other->other != NULL) {
-			TARFS_DPF(ALLOC, "%s: %.*s: invalid link to %.*s\n",
+			kprintf("%s: %.*s: invalid link to %.*s\n",
 			    __func__, (int)namelen, name, (int)linklen, link);
 			error = EINVAL;
 			goto bad;
@@ -765,7 +766,7 @@ again:
 			linklen = strnlen(link, sizeof(hdrp->linkname));
 		}
 		if (linklen == 0) {
-			TARFS_DPF(ALLOC, "%s: %.*s: link without target\n",
+			kprintf("%s: %.*s: link without target\n",
 			    __func__, (int)namelen, name);
 			error = EINVAL;
 			goto bad;
@@ -777,7 +778,7 @@ again:
 	case TAR_TYPE_BLOCK:
 		if (tarfs_str2int64(hdrp->major, sizeof(hdrp->major), &num) != 0 ||
 		    num < 0 || num > INT_MAX) {
-			TARFS_DPF(ALLOC, "%s: %.*s: invalid device major\n",
+			kprintf("%s: %.*s: invalid device major\n",
 			    __func__, (int)namelen, name);
 			error = EINVAL;
 			goto bad;
@@ -785,7 +786,7 @@ again:
 		major = num;
 		if (tarfs_str2int64(hdrp->minor, sizeof(hdrp->minor), &num) != 0 ||
 		    num < 0 || num > INT_MAX) {
-			TARFS_DPF(ALLOC, "%s: %.*s: invalid device minor\n",
+			kprintf("%s: %.*s: invalid device minor\n",
 			    __func__, (int)namelen, name);
 			error = EINVAL;
 			goto bad;
@@ -799,7 +800,7 @@ again:
 	case TAR_TYPE_CHAR:
 		if (tarfs_str2int64(hdrp->major, sizeof(hdrp->major), &num) != 0 ||
 		    num < 0 || num > INT_MAX) {
-			TARFS_DPF(ALLOC, "%s: %.*s: invalid device major\n",
+			kprintf("%s: %.*s: invalid device major\n",
 			    __func__, (int)namelen, name);
 			error = EINVAL;
 			goto bad;
@@ -807,7 +808,7 @@ again:
 		major = num;
 		if (tarfs_str2int64(hdrp->minor, sizeof(hdrp->minor), &num) != 0 ||
 		    num < 0 || num > INT_MAX) {
-			TARFS_DPF(ALLOC, "%s: %.*s: invalid device minor\n",
+			kprintf("%s: %.*s: invalid device minor\n",
 			    __func__, (int)namelen, name);
 			error = EINVAL;
 			goto bad;
@@ -819,7 +820,7 @@ again:
 		    parent, &tnp);
 		break;
 	default:
-		TARFS_DPF(ALLOC, "%s: unsupported type %c for %.*s\n",
+		kprintf("%s: unsupported type %c for %.*s\n",
 		    __func__, hdrp->typeflag[0], (int)namelen, name);
 		error = EINVAL;
 		break;
@@ -839,7 +840,7 @@ skip:
 	}
 	return (0);
 eof:
-	TARFS_DPF(IO, "%s: premature end of file\n", __func__);
+	kprintf("%s: premature end of file\n", __func__);
 	error = EIO;
 	goto bad;
 bad:
@@ -875,7 +876,7 @@ tarfs_alloc_mount(struct mount *mp, struct vnode *vp,
 
 	tmp = NULL;
 
-	TARFS_DPF(ALLOC, "%s: Allocating tarfs mount structure for vp %p\n",
+	kprintf("%s: Allocating tarfs mount structure for vp %p\n",
 	    __func__, vp);
 
 	/* Get source metadata */
@@ -891,7 +892,7 @@ tarfs_alloc_mount(struct mount *mp, struct vnode *vp,
 
 	/* Allocate and initialize tarfs mount structure */
 	tmp = kmalloc(sizeof(*tmp), M_TARFSMNT, M_WAITOK | M_ZERO);
-	TARFS_DPF(ALLOC, "%s: Allocated mount structure\n", __func__);
+	kprintf("%s: Allocated mount structure\n", __func__);
 	mp->mnt_data = (qaddr_t)tmp;
 
 	lockinit(&tmp->allnode_lock, "tarfs allnode lock", 0, LK_CANRECURSE);
@@ -924,7 +925,7 @@ tarfs_alloc_mount(struct mount *mp, struct vnode *vp,
 
 	*tmpp = tmp;
 
-	TARFS_DPF(ALLOC, "%s: pfsmnt_root %p\n", __func__, tmp->root);
+	kprintf("%s: pfsmnt_root %p\n", __func__, tmp->root);
 	return (0);
 
 bad:
@@ -1017,9 +1018,9 @@ tarfs_mount(struct mount *mp, char *path, caddr_t data, struct ucred *cred)
                 return (error);
 
         if (vp->v_type != VREG) {
-                TARFS_DPF(FS, "%s: not a regular file\n", __func__);
+                kprintf("%s: not a regular file\n", __func__);
                 error = EOPNOTSUPP;
-                goto bad_open_locked;
+                goto bad_open_unlocked;
         }
 
         root_uid  = (args.root_uid  != (uid_t)-1) ? args.root_uid  : va.va_uid;
@@ -1027,11 +1028,11 @@ tarfs_mount(struct mount *mp, char *path, caddr_t data, struct ucred *cred)
         root_mode = (args.root_mode != (mode_t)-1)? args.root_mode : va.va_mode;
 
         /* Find the source tarball */
-        TARFS_DPF(FS, "%s(%s%s%s, uid=%u, gid=%u, mode=%o)\n", __func__,
+        kprintf("%s(%s%s%s, uid=%u, gid=%u, mode=%o)\n", __func__,
             from, (as != from) ? " as " : "", (as != from) ? as : "",
             root_uid, root_gid, root_mode);
 #if 0
-	TARFS_DPF(FS, "%s: N: hold %u use %u lock 0x%x\n", __func__,
+	kprintf("%s: N: hold %u use %u lock 0x%x\n", __func__,
 	    0, 0, 0);
 	/* vp is now held and locked */
 #endif
@@ -1048,15 +1049,15 @@ tarfs_mount(struct mount *mp, char *path, caddr_t data, struct ucred *cred)
 	nlookup_done(&nd); /* We need this checked no matter what */
 
 	if (error != 0) {
-		TARFS_DPF(FS, "%s: failed to open %s: %d\n", __func__,
+		kprintf("%s: failed to open %s: %d\n", __func__,
 		    from, error);
 		vput(vp);
 		goto bad;
 	}
-	TARFS_DPF(FS, "%s: O: hold %u use %u lock 0x%x\n", __func__,
+	kprintf("%s: O: hold %u use %u lock 0x%x\n", __func__,
 	    0, 0, 0);
 	if (vp->v_type != VREG) {
-		TARFS_DPF(FS, "%s: not a regular file\n", __func__);
+		kprintf("%s: not a regular file\n", __func__);
 		error = EOPNOTSUPP;
 		goto bad_open_locked;
 	}
@@ -1071,11 +1072,11 @@ tarfs_mount(struct mount *mp, char *path, caddr_t data, struct ucred *cred)
 	error = tarfs_alloc_mount(mp, vp, root_uid, root_gid, root_mode, &tmp);
 	/* vp is now held but unlocked */
 	if (error != 0) {
-		TARFS_DPF(FS, "%s: failed to mount %s: %d\n", __func__,
+		kprintf("%s: failed to mount %s: %d\n", __func__,
 		    from, error);
 		goto bad_open_unlocked;
 	}
-	TARFS_DPF(FS, "%s: M: hold %u use %u lock 0x%x\n", __func__,
+	kprintf("%s: M: hold %u use %u lock 0x%x\n", __func__,
 	    0, 0, 0);
 
 #if 0 /* XXX */
@@ -1092,7 +1093,7 @@ tarfs_mount(struct mount *mp, char *path, caddr_t data, struct ucred *cred)
 
 	vfs_add_vnodeops(mp, &tarfs_vnodeops, &mp->mnt_vn_norm_ops);
 
-	TARFS_DPF(FS, "%s: success\n", __func__);
+	kprintf("%s: success\n", __func__);
 
 	return (0);
 
@@ -1100,16 +1101,16 @@ bad_open_locked:
 	kprintf("NOT A REGULAR FILE");
 	vn_unlock(vp);
 	/* vp must be held and locked */
-	TARFS_DPF(FS, "%s: L: hold %u use %u lock 0x%x\n", __func__,
+	kprintf("%s: L: hold %u use %u lock 0x%x\n", __func__,
 	    0, 0, 0);
 bad_open_unlocked:
 	/* vp must be held and unlocked */
-	TARFS_DPF(FS, "%s: E: hold %u use %u lock 0x%x\n", __func__,
+	kprintf("%s: E: hold %u use %u lock 0x%x\n", __func__,
 	    0, 0, 0);
 	(void)vn_close(vp, flags, NULL);
 bad:
 	/* vp must be released and unlocked */
-	TARFS_DPF(FS, "%s: X: hold %u use %u lock 0x%x\n", __func__,
+	kprintf("%s: X: hold %u use %u lock 0x%x\n", __func__,
 	    0, 0, 0);
 	return (error);
 }
@@ -1125,7 +1126,7 @@ tarfs_unmount(struct mount *mp, int mntflags)
 	int error;
 	int flags = 0;
 
-	TARFS_DPF(FS, "%s: Unmounting %p\n", __func__, mp);
+	kprintf("%s: Unmounting %p\n", __func__, mp);
 
 	/* Handle forced unmounts */
 	if (mntflags & MNT_FORCE)
@@ -1139,10 +1140,10 @@ tarfs_unmount(struct mount *mp, int mntflags)
 	vp = tmp->vp;
 
 	KKASSERT(vp != NULL);
-	TARFS_DPF(FS, "%s: U: hold %u use %u lock 0x%x\n", __func__,
+	kprintf("%s: U: hold %u use %u lock 0x%x\n", __func__,
 	    0, 0, 0);
 	vn_close(vp, FREAD, NULL);
-	TARFS_DPF(FS, "%s: C: hold %u use %u lock 0x%x\n", __func__,
+	kprintf("%s: C: hold %u use %u lock 0x%x\n", __func__,
 	    0, 0, 0);
 	tarfs_free_mount(tmp);
 
@@ -1159,7 +1160,7 @@ tarfs_root(struct mount *mp, struct vnode **vpp)
 	struct vnode *nvp;
 	int error;
 
-	TARFS_DPF(FS, "%s: Getting root vnode\n", __func__);
+	kprintf("%s: Getting root vnode\n", __func__);
 
 	error = VFS_VGET(mp, NULL, TARFS_ROOTINO, &nvp);
 	if (error != 0)
@@ -1206,19 +1207,18 @@ tarfs_vget(struct mount *mp, struct vnode *dvp, ino_t ino, struct vnode **vpp)
 	struct vnode *vp;
 	int error;
 
-	TARFS_DPF(FS, "%s: mp %p, ino %lu, lkflags %d\n", __func__, mp, ino,
-	    dvp->v_flag);
+	kprintf("%s: mp %p, ino %lu\n", __func__, mp, ino);
 
 	td = curthread;
 	if ((*vpp = tarfs_ihashget(tmp->root->rdev, ino)) != NULL)
 		return (0);
 
 	if (*vpp != NULL) {
-		TARFS_DPF(FS, "%s: found hashed vnode %p\n", __func__, *vpp);
+		kprintf("%s: found hashed vnode %p\n", __func__, *vpp);
 		return (error);
 	}
 
-	TARFS_DPF(FS, "%s: no hashed vnode for inode %lu\n", __func__, ino);
+	kprintf("%s: no hashed vnode for inode %lu\n", __func__, ino);
 
 	tmp = MP_TO_TARFS_MOUNT(mp);
 
@@ -1235,12 +1235,12 @@ tarfs_vget(struct mount *mp, struct vnode *dvp, ino_t ino, struct vnode **vpp)
 		if (tnp->ino == ino)
 			break;
 	}
-	TARFS_DPF(FS, "%s: search of all nodes found %p\n", __func__, tnp);
+	kprintf("%s: search of all nodes found %p\n", __func__, tnp);
 	if (tnp == NULL)
 		return (ENOENT);
 
 	(void)getnewvnode(VT_TARFS, mp,	&vp, VLKTIMEOUT, LK_CANRECURSE);
-	TARFS_DPF(FS, "%s: allocated vnode\n", __func__);
+	kprintf("%s: allocated vnode\n", __func__);
 	vp->v_data = tnp;
 	vp->v_type = tnp->type;
 	tnp->vnode = vp;
@@ -1248,7 +1248,7 @@ tarfs_vget(struct mount *mp, struct vnode *dvp, ino_t ino, struct vnode **vpp)
 	// lockmgr(&vp->v_vnlock, lkflags); /* BWEH!!!??! */
 	insmntque(vp, mp); /* Maybe look into a retval? That would seem nice */
 
-	TARFS_DPF(FS, "%s: inserting entry into VFS hash\n", __func__);
+	kprintf("%s: inserting entry into VFS hash\n", __func__);
 
 	if (tarfs_ihashins(tnp)) {
 		/* XXX: See if this is correct, its what ext2 does */

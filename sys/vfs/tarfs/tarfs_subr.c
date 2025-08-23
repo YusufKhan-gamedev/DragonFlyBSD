@@ -97,7 +97,7 @@ tarfs_lookup_node(struct tarfs_node *tnp, struct tarfs_node *f,
 	boolean_t found;
 	struct tarfs_node *entry;
 
-	TARFS_DPF(LOOKUP, "%s: name: %.*s\n", __func__, (int)cnp->cn_namelen,
+	kprintf("%s: name: %.*s\n", __func__, (int)cnp->cn_namelen,
 	    cnp->cn_nameptr);
 
 	found = false;
@@ -121,12 +121,12 @@ tarfs_lookup_node(struct tarfs_node *tnp, struct tarfs_node *f,
 #endif
 			entry = entry->other;
 		}
-		TARFS_DPF(LOOKUP, "%s: found tarfs_node %p\n", __func__,
+		kprintf("%s: found tarfs_node %p\n", __func__,
 		    entry);
 		return (entry);
 	}
 
-	TARFS_DPF(LOOKUP, "%s: no match found\n", __func__);
+	kprintf("%s: no match found\n", __func__);
 	return (NULL);
 }
 
@@ -135,26 +135,26 @@ tarfs_lookup_dir(struct tarfs_node *tnp, off_t cookie)
 {
 	struct tarfs_node *current;
 
-	TARFS_DPF(LOOKUP, "%s: tarfs_node %p, cookie %jd\n", __func__, tnp,
+	kprintf("%s: tarfs_node %p, cookie %jd\n", __func__, tnp,
 	    cookie);
-	TARFS_DPF(LOOKUP, "%s: name: %s\n", __func__,
+	kprintf("%s: name: %s\n", __func__,
 	    (tnp->name == NULL) ? "<<root>>" : tnp->name);
 
 	if (cookie == tnp->dir.lastcookie &&
 	    tnp->dir.lastnode != NULL) {
-		TARFS_DPF(LOOKUP, "%s: Using cached entry: tarfs_node %p, "
+		kprintf("%s: Using cached entry: tarfs_node %p, "
 		    "cookie %jd\n", __func__, tnp->dir.lastnode,
 		    tnp->dir.lastcookie);
 		return (tnp->dir.lastnode);
 	}
 
 	TAILQ_FOREACH(current, &tnp->dir.dirhead, dirents) {
-		TARFS_DPF(LOOKUP, "%s: tarfs_node %p, current %p, ino %lu\n",
+		kprintf("%s: tarfs_node %p, current %p, ino %lu\n",
 		    __func__, tnp, current, current->ino);
 		TARFS_DPF_IFF(LOOKUP, current->name != NULL,
 		    "%s: name: %s\n", __func__, current->name);
 		if (current->ino == cookie) {
-			TARFS_DPF(LOOKUP, "%s: Found entry: tarfs_node %p, "
+			kprintf("%s: Found entry: tarfs_node %p, "
 			    "cookie %lu\n", __func__, current,
 			    current->ino);
 			break;

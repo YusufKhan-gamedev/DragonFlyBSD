@@ -142,7 +142,7 @@ tarfs_io_read(struct tarfs_mount *tmp, bool raw, struct uio *uiop)
 		}
 	}
 #ifdef TARFS_ZIO
-	TARFS_DPF(IO, "%s(%zu, %zu) = %d (resid %zd)\n", __func__,
+	kprintf("%s(%zu, %zu) = %d (resid %zd)\n", __func__,
 	    (size_t)off, len, error, uiop->uio_resid);
 #endif
 	return (error);
@@ -164,7 +164,7 @@ tarfs_io_read_buf(struct tarfs_mount *tmp, bool raw,
 	int error;
 
 	if (len == 0) {
-		TARFS_DPF(IO, "%s(%zu, %zu) null\n", __func__,
+		kprintf("%s(%zu, %zu) null\n", __func__,
 		    (size_t)off, len);
 		return (0);
 	}
@@ -179,17 +179,17 @@ tarfs_io_read_buf(struct tarfs_mount *tmp, bool raw,
 	auio.uio_td = curthread;
 	error = tarfs_io_read(tmp, raw, &auio);
 	if (error != 0) {
-		TARFS_DPF(IO, "%s(%zu, %zu) error %d\n", __func__,
+		kprintf("%s(%zu, %zu) error %d\n", __func__,
 		    (size_t)off, len, error);
 		return (-error);
 	}
 	res = len - auio.uio_resid;
 	if (res == 0 && len != 0) {
-		TARFS_DPF(IO, "%s(%zu, %zu) eof\n", __func__,
+		kprintf("%s(%zu, %zu) eof\n", __func__,
 		    (size_t)off, len);
 	} else {
 #ifdef TARFS_ZIO
-		TARFS_DPF(IO, "%s(%zu, %zu) read %zd | %*D\n", __func__,
+		kprintf("%s(%zu, %zu) read %zd | %*D\n", __func__,
 		    (size_t)off, len, res,
 		    (int)(res > 8 ? 8 : res), (uint8_t *)buf, " ");
 #endif
@@ -241,7 +241,7 @@ tarfs_zio_update_index(struct tarfs_zio *zio, off_t i, off_t o)
 			zio->idx = realloc(zio->idx,
 			    zio->szidx * sizeof(*zio->idx),
 			    M_TARFSZSTATE, M_ZERO | M_WAITOK);
-			TARFS_DPF(ALLOC, "%s: resized zio index\n", __func__);
+			kprintf("%s: resized zio index\n", __func__);
 		}
 		zio->idx[zio->curidx].i = i;
 		zio->idx[zio->curidx].o = o;
@@ -622,7 +622,7 @@ tarfs_zio_init(struct tarfs_mount *tmp, off_t i, off_t o)
 	struct vnode *zvp;
 
 	zio = kmalloc(sizeof(*zio), M_TARFSZSTATE, M_ZERO | M_WAITOK);
-	TARFS_DPF(ALLOC, "%s: allocated zio\n", __func__);
+	kprintf("%s: allocated zio\n", __func__);
 	zio->tmp = tmp;
 	zio->szidx = 128;
 	zio->idx = kmalloc(zio->szidx * sizeof(*zio->idx), M_TARFSZSTATE,
@@ -632,7 +632,7 @@ tarfs_zio_init(struct tarfs_mount *tmp, off_t i, off_t o)
 	zio->idx[zio->curidx].i = zio->ipos = i;
 	zio->idx[zio->curidx].o = zio->opos = o;
 	tmp->zio = zio;
-	TARFS_DPF(ALLOC, "%s: allocated zio index\n", __func__);
+	kprintf("%s: allocated zio index\n", __func__);
 	(void)getnewvnode("tarfsz", tmp->vfs, &tarfs_znodeops, &zvp);
 	zvp->v_data = zio;
 	zvp->v_type = VREG;
@@ -702,7 +702,7 @@ tarfs_zio_fini(struct tarfs_mount *tmp)
 	if (tmp->znode != NULL) {
 		error = vn_lock(tmp->znode, LK_EXCLUSIVE);
 		if (error != 0) {
-			TARFS_DPF(ALLOC, "%s: failed to lock znode", __func__);
+			kprintf("%s: failed to lock znode", __func__);
 			return (error);
 		}
 		tmp->znode->v_mount = NULL;
@@ -712,16 +712,16 @@ tarfs_zio_fini(struct tarfs_mount *tmp)
 	}
 #ifdef ZSTDIO
 	if (zio->zstd != NULL) {
-		TARFS_DPF(ALLOC, "%s: freeing zstd state\n", __func__);
+		kprintf("%s: freeing zstd state\n", __func__);
 		ZSTD_freeDStream(zio->zstd->zds);
 		kfree(zio->zstd, M_TARFSZSTATE);
 	}
 #endif
 	if (zio->idx != NULL) {
-		TARFS_DPF(ALLOC, "%s: freeing index\n", __func__);
+		kprintf("%s: freeing index\n", __func__);
 		kfree(zio->idx, M_TARFSZSTATE);
 	}
-	TARFS_DPF(ALLOC, "%s: freeing zio\n", __func__);
+	kprintf("%s: freeing zio\n", __func__);
 	kfree(zio, M_TARFSZSTATE);
 	tmp->zio = NULL;
 	return (error);

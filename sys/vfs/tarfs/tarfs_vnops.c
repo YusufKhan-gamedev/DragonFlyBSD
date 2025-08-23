@@ -57,7 +57,7 @@ tarfs_open(struct vop_open_args *ap)
 	KKASSERT(vn_islocked(vp));
 	tnp = VP_TO_TARFS_NODE(vp);
 
-	TARFS_DPF(VNODE, "%s(%p=%s, %o)\n", __func__,
+	kprintf("%s(%p=%s, %o)\n", __func__,
 	    tnp, tnp->name, ap->a_mode);
 
 	if (vp->v_type != VREG && vp->v_type != VDIR)
@@ -78,7 +78,7 @@ tarfs_close(struct vop_close_args *ap)
 	KKASSERT(vn_islocked(vp));
 	tnp = VP_TO_TARFS_NODE(vp);
 
-	TARFS_DPF(VNODE, "%s(%p=%s)\n", __func__,
+	kprintf("%s(%p=%s)\n", __func__,
 	    tnp, tnp->name);
 #else
 	(void)ap;
@@ -102,7 +102,7 @@ tarfs_access(struct vop_access_args *ap)
 	KKASSERT(vn_islocked(vp));
 	tnp = VP_TO_TARFS_NODE(vp);
 
-	TARFS_DPF(VNODE, "%s(%p=%s, %o)\n", __func__,
+	kprintf("%s(%p=%s, %o)\n", __func__,
 	    tnp, tnp->name, accmode);
 
 	switch (vp->v_type) {
@@ -189,7 +189,7 @@ tarfs_getattr(struct vop_getattr_args *ap)
 	vap = ap->a_vap;
 	tnp = VP_TO_TARFS_NODE(vp);
 
-	TARFS_DPF(VNODE, "%s(%p=%s)\n", __func__,
+	kprintf("%s(%p=%s)\n", __func__,
 	    tnp, tnp->name);
 
 	vap->va_type = vp->v_type;
@@ -234,7 +234,7 @@ tarfs_lookup(struct vop_old_lookup_args *ap)
 	tmp = dirnode->tmp;
 	tnp = NULL;
 
-	TARFS_DPF(LOOKUP, "%s(%p=%s, %.*s)\n", __func__,
+	kprintf("%s(%p=%s, %.*s)\n", __func__,
 	    dirnode, dirnode->name,
 	    (int)cnp->cn_namelen, cnp->cn_nameptr);
 
@@ -284,7 +284,7 @@ tarfs_lookup(struct vop_old_lookup_args *ap)
 	} else {
 		tnp = tarfs_lookup_node(dirnode, NULL, cnp);
 		if (tnp == NULL) {
-			TARFS_DPF(LOOKUP, "%s(%p=%s, %.*s): file not found\n", __func__,
+			kprintf("%s(%p=%s, %.*s): file not found\n", __func__,
 			    dirnode, dirnode->name,
 			    (int)cnp->cn_namelen, cnp->cn_nameptr);
 			return (ENOENT);
@@ -306,7 +306,7 @@ tarfs_lookup(struct vop_old_lookup_args *ap)
 #ifdef	TARFS_DEBUG
 	if (tnp == NULL)
 		tnp = VP_TO_TARFS_NODE(*vpp);
-	TARFS_DPF(LOOKUP, "%s: found vnode %p, tarfs_node %p\n", __func__,
+	kprintf("%s: found vnode %p, tarfs_node %p\n", __func__,
 	    *vpp, tnp);
 #endif	/* TARFS_DEBUG */
 
@@ -341,16 +341,16 @@ tarfs_readdir(struct vop_readdir_args *ap)
 	current = NULL;
 	ndirents = 0;
 
-	TARFS_DPF(VNODE, "%s(%p=%s, %zu, %zd)\n", __func__,
+	kprintf("%s(%p=%s, %zu, %zd)\n", __func__,
 	    tnp, tnp->name, uio->uio_offset, uio->uio_resid);
 
 	if (uio->uio_offset == TARFS_COOKIE_EOF) {
-		TARFS_DPF(VNODE, "%s: EOF\n", __func__);
+		kprintf("%s: EOF\n", __func__);
 		return (0);
 	}
 
 	if (uio->uio_offset == TARFS_COOKIE_DOT) {
-		TARFS_DPF(VNODE, "%s: Generating . entry\n", __func__);
+		kprintf("%s: Generating . entry\n", __func__);
 		/* fake . entry */
 		cde.d_ino = tnp->ino;
 		cde.d_type = DT_DIR;
@@ -364,7 +364,7 @@ tarfs_readdir(struct vop_readdir_args *ap)
 	}
 
 	if (uio->uio_offset == TARFS_COOKIE_DOTDOT) {
-		TARFS_DPF(VNODE, "%s: Generating .. entry\n", __func__);
+		kprintf("%s: Generating .. entry\n", __func__);
 		/* fake .. entry */
 		KKASSERT(tnp->parent != NULL);
 		TARFS_NODE_LOCK(tnp->parent);
@@ -381,8 +381,9 @@ tarfs_readdir(struct vop_readdir_args *ap)
 		if (current == NULL)
 			goto done;
 		uio->uio_offset = current->ino;
-		TARFS_DPF(VNODE, "%s: [%u] setting current node to %p=%s\n",
+		kprintf("%s: [%u] setting current node to %p=%s\n",
 		    __func__, ndirents, current, current->name);
+		kprintf("a");
 		ndirents++;
 	}
 
@@ -394,11 +395,13 @@ tarfs_readdir(struct vop_readdir_args *ap)
 			goto done;
 		}
 		uio->uio_offset = current->ino;
-		TARFS_DPF(VNODE, "%s: [%u] setting current node to %p=%s\n",
+		kprintf("%s: [%u] setting current node to %p=%s\n",
 		    __func__, ndirents, current, current->name);
+		kprintf("b");
 	}
 
 	for (;;) {
+                kprintf("c");
 		cde.d_ino = current->ino;
 		switch (current->type) {
 		case VBLK:
@@ -428,17 +431,19 @@ tarfs_readdir(struct vop_readdir_args *ap)
 		(void)memcpy(cde.d_name, current->name, current->namelen);
 		cde.d_name[current->namelen] = '\0';
 		ndirents++;
+                kprintf("d");
 		/* next sibling */
 		current = TAILQ_NEXT(current, dirents);
 		if (current == NULL)
 			goto done;
+                kprintf("e");
 		uio->uio_offset = current->ino;
-		TARFS_DPF(VNODE, "%s: [%u] setting current node to %p=%s\n",
+		kprintf("%s: [%u] setting current node to %p=%s\n",
 		    __func__, ndirents, current, current->name);
 	}
 done:
-	TARFS_DPF(VNODE, "%s: %u entries written\n", __func__, ndirents);
-	TARFS_DPF(VNODE, "%s: saving cache information\n", __func__);
+	kprintf("%s: %u entries written\n", __func__, ndirents);
+	kprintf("%s: saving cache information\n", __func__);
 	if (current == NULL) {
 		uio->uio_offset = TARFS_COOKIE_EOF;
 		tnp->dir.lastcookie = 0;
@@ -449,13 +454,13 @@ done:
 	}
 
 	if (eofflag != NULL) {
-		TARFS_DPF(VNODE, "%s: Setting EOF flag\n", __func__);
+		kprintf("%s: Setting EOF flag\n", __func__);
 		*eofflag = (error == 0 && current == NULL);
 	}
 
 	/* Update for NFS */
 	if (error == 0 && cookies != NULL && ncookies != NULL) {
-		TARFS_DPF(VNODE, "%s: Updating NFS cookies\n", __func__);
+		kprintf("%s: Updating NFS cookies\n", __func__);
 		current = NULL;
 		*cookies = kmalloc(ndirents * sizeof(off_t), M_TEMP, M_WAITOK);
 		*ncookies = ndirents;
@@ -477,7 +482,7 @@ done:
 					off = current->ino;
 			}
 
-			TARFS_DPF(VNODE, "%s: [%u] offset %zu\n", __func__,
+			kprintf("%s: [%u] offset %zu\n", __func__,
 			    idx, off);
 			(*cookies)[idx] = off;
 		}
@@ -512,7 +517,7 @@ tarfs_read(struct vop_read_args *ap)
 	tnp = VP_TO_TARFS_NODE(vp);
 	error = 0;
 
-	TARFS_DPF(VNODE, "%s(%p=%s, %zu, %zd)\n", __func__,
+	kprintf("%s(%p=%s, %zu, %zd)\n", __func__,
 	    tnp, tnp->name, uiop->uio_offset, uiop->uio_resid);
 
 	while ((resid = uiop->uio_resid) > 0) {
@@ -546,7 +551,7 @@ tarfs_readlink(struct vop_readlink_args *ap)
 
 	tnp = VP_TO_TARFS_NODE(vp);
 
-	TARFS_DPF(VNODE, "%s(%p=%s)\n", __func__,
+	kprintf("%s(%p=%s)\n", __func__,
 	    tnp, tnp->name);
 
 	error = uiomove(tnp->link.name,
@@ -614,7 +619,7 @@ tarfs_strategy(struct vop_strategy_args *ap)
 	KKASSERT(ap->a_bio->bio_offset >= 0);
 	KKASSERT(bp->b_bcount > 0);
 	KKASSERT(bp->b_bufsize >= bp->b_bcount);
-	TARFS_DPF(VNODE, "%s(%p=%s, %zu, %d/%d)\n", __func__, tnp,
+	kprintf("%s(%p=%s, %zu, %d/%d)\n", __func__, tnp,
 	    tnp->name, (size_t)ap->a_bio->bio_offset, bp->b_bcount, bp->b_bufsize);
 	iov.iov_base = bp->b_data;
 	iov.iov_len = bp->b_bcount;

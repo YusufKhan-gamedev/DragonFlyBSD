@@ -26,14 +26,8 @@
  * SUCH DAMAGE.
  */
 
-#ifndef	_VFS_TARFS_TARFS_DBG_H_
-#define	_VFS_TARFS_TARFS_DBG_H_
+#if 1
 
-#ifndef _KERNEL
-#error Should only be included by kernel
-#endif
-
-#if defined(TARFS_DEBUG) || true
 extern int tarfs_debug;
 
 #define	TARFS_DEBUG_ALLOC	0x01
@@ -58,9 +52,5 @@ extern int tarfs_debug;
 		    && (tarfs_debug & TARFS_DEBUG_##category) != 0)	\
 			kprintf(fmt, ## __VA_ARGS__);			\
 	} while (0)
-#else
-#define	TARFS_DPF(category, fmt, ...)
-#define	TARFS_DPF_IFF(category, cond, fmt, ...)
-#endif
 
 #endif	/* _VFS_TARFS_TARFS_DBG_H_ */
