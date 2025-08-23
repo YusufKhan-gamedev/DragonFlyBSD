@@ -1249,7 +1249,7 @@ tarfs_vget(struct mount *mp, struct vnode *dvp, ino_t ino, struct vnode **vpp)
 	insmntque(vp, mp); /* Maybe look into a retval? That would seem nice */
 
 	kprintf("%s: inserting entry into VFS hash\n", __func__);
-
+	
 	if (tarfs_ihashins(tnp)) {
 		/* XXX: See if this is correct, its what ext2 does */
 		kprintf("Retrying tarfs_node, cant insert number %ld\n",
@@ -1260,6 +1260,9 @@ tarfs_vget(struct mount *mp, struct vnode *dvp, ino_t ino, struct vnode **vpp)
 		vx_put(vp);
 		return (-1);
 	}
+
+	vref(tnp->tmp->vp);
+	vx_downgrade(vp);
 
 	*vpp = vp;
 	return (0);
