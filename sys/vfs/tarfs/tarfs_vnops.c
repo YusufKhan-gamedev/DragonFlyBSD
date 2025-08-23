@@ -291,6 +291,7 @@ tarfs_lookup(struct vop_old_lookup_args *ap)
 		}
 
 #if 1
+		/* Note: the elifed bit should not run probably? */
 		kprintf("TODO: FIX THIS SO WE DONT GET ENODIR WHEN MOUNT\n");
 #elif
 		if ((cnp->cn_flags & CNP_LASTCN) == 0 &&
@@ -383,7 +384,7 @@ tarfs_readdir(struct vop_readdir_args *ap)
 		uio->uio_offset = current->ino;
 		kprintf("%s: [%u] setting current node to %p=%s\n",
 		    __func__, ndirents, current, current->name);
-		kprintf("a");
+		kprintf("a\n");
 		ndirents++;
 	}
 
@@ -397,7 +398,7 @@ tarfs_readdir(struct vop_readdir_args *ap)
 		uio->uio_offset = current->ino;
 		kprintf("%s: [%u] setting current node to %p=%s\n",
 		    __func__, ndirents, current, current->name);
-		kprintf("b");
+		kprintf("b\n");
 	}
 
 	for (;;) {
@@ -431,12 +432,12 @@ tarfs_readdir(struct vop_readdir_args *ap)
 		(void)memcpy(cde.d_name, current->name, current->namelen);
 		cde.d_name[current->namelen] = '\0';
 		ndirents++;
-                kprintf("d");
+                kprintf("d\n");
 		/* next sibling */
 		current = TAILQ_NEXT(current, dirents);
 		if (current == NULL)
 			goto done;
-                kprintf("e");
+                kprintf("e\n");
 		uio->uio_offset = current->ino;
 		kprintf("%s: [%u] setting current node to %p=%s\n",
 		    __func__, ndirents, current, current->name);
