@@ -8,7 +8,7 @@ CONTRIBDIR=	${.CURDIR}/../../contrib/libarchive/libarchive
 SHLIB_MAJOR=	5
 CFLAGS+=	-DHAVE_CONFIG_H
 CFLAGS+=	-I${.OBJDIR} -I${.CURDIR} -I${CONTRIBDIR}
-CFLAGS+=	-I${.CURDIR}/../../contrib/zstd/lib
+CFLAGS+=	-I${.CURDIR}/../../sys/contrib/zstd/lib
 
 # This can be changed back to CFLAGS once iconv works correctly with
 # statically linked libraries (iconv uses dynamic-only dlopen(3))
